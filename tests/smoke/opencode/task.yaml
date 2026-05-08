@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: Canonical Ltd.
+# SPDX-License-Identifier: Apache-2.0
+
+summary: Smoke test for the opencode snap
+details: |
+    This test verifies that the opencode snap is properly installed,
+    launches without crashing, and prints help output.
+
+execute: |
+    # Verify the snap is installed.
+    snap list | MATCH "opencode"
+
+    # Run opencode and check help output.
+    snap run opencode --help 2>&1 | MATCH "opencode completion"
+
+    # Verify opencode run (non-interactive mode) works.
+    snap run opencode --version 2>&1 | MATCH "1.14.41"

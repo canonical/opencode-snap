@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+
+base="$SNAP/lib/node_modules/opencode-snap-wrapper/node_modules"
+fast="$base/opencode-linux-x64/bin/opencode"
+baseline="$base/opencode-linux-x64-baseline/bin/opencode"
+
+if grep -qiE '(^|[[:space:]])avx2([[:space:]]|$)' /proc/cpuinfo; then
+    exec "$fast" "$@"
+fi
+
+exec "$baseline" "$@"

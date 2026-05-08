@@ -1,0 +1,10 @@
+{
+  "name": "opencode-snap-wrapper",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Minimal npm wrapper used to stage opencode-ai into the snap",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "opencode-ai": "latest"
+  }
+}
