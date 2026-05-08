@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: Canonical Ltd.
+# SPDX-License-Identifier: Apache-2.0
+
+# Snapd tab completion for opencode.
+# Installed via the 'completer' key in snapcraft.yaml.
+# Runs inside the snap sandbox, so use $SNAP/bin/openshell.
+
+_opencode() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    opts="$($SNAP/bin/openshell opencode --get-yargs-completions "${COMP_WORDS[@]}")"
+    COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
+    return 0
+}
+complete -F _opencode opencode
