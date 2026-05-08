@@ -4,8 +4,8 @@ version: 1.14.41
 title: OpenCode
 summary: Open source AI coding agent for the terminal
 description: |
-  OpenCode is an open source AI coding agent for terminal workflows.
-  This snap packages the upstream prebuilt binaries from the opencode-ai GitHub releases.
+  OpenCode is an open source AI coding agent for terminal workflows. This snap
+  packages the upstream prebuilt binaries from the opencode-ai GitHub releases.
 license: Apache-2.0
 contact: https://github.com/anomalyco/opencode/issues
 website: https://opencode.ai
