@@ -89,14 +89,14 @@ jobs:
 
       - name: Download snap artifact
         if: ${{ inputs.artifact-pattern == '' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.artifact-name }}
           path: ./snaps/
 
       - name: Download snap artifacts
         if: ${{ inputs.artifact-pattern != '' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: ${{ inputs.artifact-pattern }}
           path: ./snaps/
