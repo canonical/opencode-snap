@@ -29,6 +29,6 @@ jobs:
     # SNAPCRAFT_STORE_CREDENTIALS to each one.
     with:
       snapstore-channel: ${{ github.ref_type == 'tag' && 'latest/candidate' || vars.SNAPCRAFT_CHANNEL || 'latest/edge' }}
-      skip-spread-tests: ${{ inputs.skip-spread-tests }}
+      skip-spread-tests: ${{ inputs.skip-spread-tests || false }}
     secrets:
       publish-credentials: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
