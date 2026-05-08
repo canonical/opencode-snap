@@ -28,8 +28,7 @@ parts:
       craftctl default
       version="$(node -p "require('$CRAFT_PART_INSTALL/lib/node_modules/opencode-snap-wrapper/node_modules/opencode-ai/package.json').version")"
       craftctl set version="$version"
-      rm -rf "$CRAFT_PART_INSTALL/lib/node_modules/opencode-snap-wrapper/node_modules/opencode-linux-x64-musl"
-      rm -rf "$CRAFT_PART_INSTALL/lib/node_modules/opencode-snap-wrapper/node_modules/opencode-linux-x64-baseline-musl"
+      find "$CRAFT_PART_INSTALL/lib/node_modules/opencode-snap-wrapper/node_modules" -maxdepth 1 -name '*-musl' -exec rm -rf {} +
       rm -rf "$CRAFT_PART_INSTALL/lib/node_modules/opencode-snap-wrapper/node_modules/.bin"
       rm -rf "$CRAFT_PART_INSTALL/lib/node_modules/opencode-snap-wrapper/node_modules/opencode-ai"
       # We cannot patchelf the prebuilt binaries as this corrupts the elf structure.
