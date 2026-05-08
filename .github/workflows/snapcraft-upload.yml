@@ -1,0 +1,146 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: Canonical Ltd.
+name: snapcraft upload
+
+on:
+  workflow_call:
+    inputs:
+      artifact-name:
+        type: string
+        description: "Artifact name to download and publish"
+        required: false
+        default: ""
+      artifact-pattern:
+        type: string
+        description: "Artifact name pattern to download and publish"
+        required: false
+        default: ""
+      cache-host-snaps:
+        type: boolean
+        description: "Whether to cache host snaps (snapd, core24) during installation"
+        required: false
+        default: true
+      snapd-channel:
+        type: string
+        description: "Snap store channel for snapd snap (e.g., latest/stable, latest/edge)"
+        required: false
+        default: latest/stable
+      core24-channel:
+        type: string
+        description: "Snap store channel for core24 snap (e.g., latest/stable, latest/edge)"
+        required: false
+        default: latest/stable
+      snapcraft-channel:
+        type: string
+        description: "Snap store channel for Snapcraft snap (e.g., latest/stable,
+          latest/edge)"
+        required: false
+        default: latest/stable
+      snapstore-channel:
+        type: string
+        description: "Snap store channel to publish to (e.g., latest/edge)"
+        required: true
+      github-environment:
+        type: string
+        description: "Deployment environment (used for approval gates)"
+        required: true
+      github-deployment:
+        type: boolean
+        description: "Whether this upload should be marked as a deployment (used for approval gates)"
+        required: false
+        default: false
+    secrets:
+      publish-credentials:
+        description: "GitHub secret containing Snap Store credentials for publishing"
+        required: true
+
+jobs:
+  upload:
+    name: upload
+    runs-on: ubuntu-24.04
+    environment:
+      name: ${{ inputs.github-environment }}
+      deployment: ${{ inputs.github-deployment }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install snapd snap
+        uses: ./.github/actions/install-cached-snap
+        with:
+          snap-name: snapd
+          channel: ${{ inputs.snapd-channel }}
+          enable-cache: ${{ inputs.cache-host-snaps }}
+
+      - name: Install core24 snap
+        uses: ./.github/actions/install-cached-snap
+        with:
+          snap-name: core24
+          channel: ${{ inputs.core24-channel }}
+          enable-cache: ${{ inputs.cache-host-snaps }}
+
+      - name: Install snapcraft snap
+        uses: ./.github/actions/install-cached-snap
+        with:
+          snap-name: snapcraft
+          channel: ${{ inputs.snapcraft-channel }}
+          classic: "true"
+          enable-cache: ${{ inputs.cache-host-snaps }}
+
+      - name: Download snap artifact
+        if: ${{ inputs.artifact-pattern == '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ./snaps/
+
+      - name: Download snap artifacts
+        if: ${{ inputs.artifact-pattern != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ inputs.artifact-pattern }}
+          path: ./snaps/
+          merge-multiple: true
+
+      - name: Release to ${{ inputs.snapstore-channel }}
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.publish-credentials }}
+          SNAP_CHANNEL: ${{ inputs.snapstore-channel }}
+        run: |
+          shopt -s nullglob globstar
+
+          for SNAP_FILE in ./snaps/**/*.snap; do
+            [ -f "$SNAP_FILE" ] || continue
+            
+            echo "Publishing $SNAP_FILE to $SNAP_CHANNEL"
+            
+            SNAP_NAME="$(basename "$SNAP_FILE")"
+            SNAP_NAME="${SNAP_NAME%.snap}"
+            SNAP_NAME="${SNAP_NAME%%_*}"
+            SNAP_DIR="$(dirname "$SNAP_FILE")"
+            
+            COMPONENT_ARGS=()
+            for comp in "$SNAP_DIR"/"$SNAP_NAME"+*.comp; do
+              [ -f "$comp" ] || continue
+              comp_file="$(basename "$comp")"
+              comp_stem="${comp_file%.comp}"
+              comp_tail="${comp_stem#*+}"
+              comp_name="${comp_tail%%_*}"
+              
+              if [ "$comp_tail" = "$comp_stem" ] || [ -z "$comp_name" ]; then
+                echo "::warning::Could not infer component name from $comp_file, skipping"
+                continue
+              fi
+              
+              echo "Adding component: $comp_name from $comp_file"
+              COMPONENT_ARGS+=(--component "$comp_name=$comp")
+            done
+            
+            if [ ${#COMPONENT_ARGS[@]} -gt 0 ]; then
+              echo "Publishing with components: ${COMPONENT_ARGS[@]}"
+              snapcraft upload --verbosity=brief "$SNAP_FILE" "${COMPONENT_ARGS[@]}" --release "$SNAP_CHANNEL"
+            else
+              echo "Publishing without components"
+              snapcraft upload --verbosity=brief "$SNAP_FILE" --release "$SNAP_CHANNEL"
+            fi
+          done

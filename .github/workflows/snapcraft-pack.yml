@@ -1,0 +1,169 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: Canonical Ltd.
+name: snapcraft pack
+
+on:
+  workflow_call:
+    inputs:
+      job-arch:
+        type: string
+        description: Architecture label used in the GitHub job name
+        required: true
+      cache-host-snaps:
+        type: boolean
+        description: "Whether to cache host snaps (snapd, core22, core24) during
+          installation"
+        required: false
+        default: true
+      snapd-channel:
+        type: string
+        description: "Snap store channel for snapd snap (e.g., latest/stable, latest/edge)"
+        required: false
+        default: latest/stable
+      core22-channel:
+        type: string
+        description: "Snap store channel for core22 snap (e.g., latest/stable, latest/edge)"
+        required: false
+        default: latest/stable
+      core24-channel:
+        type: string
+        description: "Snap store channel for core24 snap (e.g., latest/stable, latest/edge)"
+        required: false
+        default: latest/stable
+      lxd-channel:
+        type: string
+        description: "Snap store channel for LXD snap (e.g., latest/stable, latest/edge)"
+        required: false
+        default: latest/stable
+      snapcraft-channel:
+        type: string
+        description: "Snap store channel for Snapcraft snap (e.g., latest/stable,
+          latest/edge)"
+        required: false
+        default: latest/stable
+      runs-on:
+        type: string
+        description: "The type of machine to run on (e.g., ubuntu-24.04)"
+        required: false
+        default: ubuntu-24.04
+    outputs:
+      snap-filename:
+        description: "Filename of the generated snap file"
+        value: ${{ jobs.pack.outputs.snap-filename }}
+      arch:
+        description: "Architecture the snap was built for"
+        value: ${{ jobs.pack.outputs.arch }}
+      comp-filenames:
+        description: "Comma-separated list of component filenames"
+        value: ${{ jobs.pack.outputs.comp-filenames }}
+
+jobs:
+  pack:
+    name: pack (${{ inputs.job-arch }})
+    runs-on: ${{ inputs.runs-on }}
+    outputs:
+      snap-filename: ${{ steps.snap-output.outputs.snap-filename }}
+      comp-filenames: ${{ steps.comp-output.outputs.comp-filenames }}
+      arch: ${{ steps.arch.outputs.ARCH }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Check host architecture
+        id: arch
+        run: echo "ARCH=$(uname -m)" >> $GITHUB_OUTPUT
+
+      - name: Install snapd snap
+        uses: ./.github/actions/install-cached-snap
+        with:
+          snap-name: snapd
+          channel: ${{ inputs.snapd-channel }}
+          enable-cache: ${{ inputs.cache-host-snaps }}
+
+      - name: Install core22 snap
+        uses: ./.github/actions/install-cached-snap
+        with:
+          snap-name: core22
+          channel: ${{ inputs.core22-channel }}
+          enable-cache: ${{ inputs.cache-host-snaps }}
+
+      - name: Install core24 snap
+        uses: ./.github/actions/install-cached-snap
+        with:
+          snap-name: core24
+          channel: ${{ inputs.core24-channel }}
+          enable-cache: ${{ inputs.cache-host-snaps }}
+
+      - name: Install lxd snap
+        uses: ./.github/actions/install-cached-snap
+        with:
+          snap-name: lxd
+          channel: ${{ inputs.lxd-channel }}
+          enable-cache: ${{ inputs.cache-host-snaps }}
+
+      - name: Configure LXD and networking
+        shell: bash
+        run: |
+          sudo lxd init --auto
+          sudo iptables -P FORWARD ACCEPT
+          sudo chmod 666 /var/snap/lxd/common/lxd/unix.socket
+
+      - name: Install snapcraft snap
+        uses: ./.github/actions/install-cached-snap
+        with:
+          snap-name: snapcraft
+          channel: ${{ inputs.snapcraft-channel }}
+          classic: "true"
+          enable-cache: ${{ inputs.cache-host-snaps }}
+
+      - name: Build snap
+        shell: bash
+        run: |
+          snapcraft pack -v
+
+      - name: Capture snap output
+        id: snap-output
+        shell: bash
+        run: |
+          SNAP_FILE=$(ls -1 *.snap 2>/dev/null | head -1)
+          if [ -z "$SNAP_FILE" ]; then
+            echo "ERROR: No snap file generated"
+            exit 1
+          fi
+          echo "snap-filename=${SNAP_FILE}" >> $GITHUB_OUTPUT
+          echo "Snap file: ${SNAP_FILE}"
+
+      - name: Capture component outputs
+        id: comp-output
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(*.comp)
+          if [ ${#files[@]} -gt 0 ]; then
+            COMP_FILES=$(IFS=,; echo "${files[*]}")
+          else
+            COMP_FILES=""
+          fi
+          echo "comp-filenames=${COMP_FILES}" >> $GITHUB_OUTPUT
+          if [ -n "${COMP_FILES}" ]; then
+            echo "Component files: ${COMP_FILES}"
+          else
+            echo "No component files generated"
+          fi
+
+      - name: Upload snap artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: snap-${{ steps.arch.outputs.ARCH }}
+          path: |
+            *.snap
+            *.comp
+          retention-days: 7
+
+      - name: Upload snapcraft logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: snapcraft-logs-${{ steps.arch.outputs.ARCH }}
+          path: "~/.local/state/snapcraft/log/snapcraft-*.log"
+          retention-days: 7

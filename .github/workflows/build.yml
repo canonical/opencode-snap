@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: Canonical Ltd.
+# SPDX-License-Identifier: Apache-2.0
+name: Build
+
+on:
+  push:
+    branches: [ main, master, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+    inputs:
+      skip-spread-tests:
+        type: boolean
+        description: "Skip integration tests (spread) and publish directly. Requires manual approval gate."
+        default: false
+        required: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  snap-build-test-publish:
+    uses: ./.github/workflows/tasteful-crafts.yml
+    # Branch builds publish to vars.SNAPCRAFT_CHANNEL when set, otherwise to
+    # latest/edge. Tag builds publish to latest/candidate. Create matching
+    # GitHub environments and add an environment secret named
+    # SNAPCRAFT_STORE_CREDENTIALS to each one.
+    with:
+      snapstore-channel: ${{ github.ref_type == 'tag' && 'latest/candidate' || vars.SNAPCRAFT_CHANNEL || 'latest/edge' }}
+      skip-spread-tests: ${{ inputs.skip-spread-tests }}
+    secrets:
+      publish-credentials: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}

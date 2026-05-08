@@ -1,0 +1,278 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: Canonical Ltd.
+name: spread
+
+on:
+  workflow_call:
+    inputs:
+      job-arch:
+        type: string
+        description: Architecture label used in the GitHub job name
+        required: true
+      cache-host-snaps:
+        type: boolean
+        description: "Whether to cache host snaps (snapd, core22, core24) during
+          installation"
+        required: false
+        default: true
+      cache-pristine-images:
+        type: boolean
+        description: Use GitHub cache to store pristine images (recommended)
+        required: false
+        default: true
+      cache-prepared-images:
+        type: boolean
+        description: Use GitHub cache to store project-specific images (cache-intensive,
+          scales poorly with number of systems)
+        required: false
+        default: false
+      snapd-channel:
+        type: string
+        description: "Snap store channel for snapd snap (e.g., latest/stable, latest/edge)"
+        required: false
+        default: latest/stable
+      core24-channel:
+        type: string
+        description: "Snap store channel for core24 snap (e.g., latest/stable, latest/edge)"
+        required: false
+        default: latest/stable
+      image-garden-channel:
+        type: string
+        description: "Snap store channel for image-garden snap (e.g., latest/stable,
+          latest/edge)"
+        required: false
+        default: latest/stable
+      image-garden-components:
+        type: string
+        description: "Comma-separated list of image-garden components to install;
+          derived from spread-arch and spread-variant when empty"
+        required: false
+        default: ""
+      runs-on:
+        type: string
+        description: "The type of machine to run on (e.g., ubuntu-24.04)"
+        required: false
+        default: ubuntu-24.04
+      spread-system:
+        type: string
+        description: "The name of the spread system to use (e.g., ubuntu-cloud-24.04)"
+        required: true
+      spread-arch:
+        type: string
+        description: "The name of the CPU architecture to use (e.g., x86_64)"
+        required: true
+      spread-tasks:
+        type: string
+        description: "The name of the spread tasks to run (e.g., tests/smoke)"
+        required: false
+      spread-variant:
+        type: string
+        description: "Variant of spread to use (empty string or plus); also selects
+          the matching image-garden component"
+        default: ""
+        required: false
+      spread-live:
+        type: boolean
+        description: "Enable live mode for spread (only available when spread-variant is
+          plus)"
+        required: false
+        default: false
+      spread-artifacts:
+        type: string
+        description: Path where spread saves task artifacts
+        required: false
+        default: ""
+      spread-artifacts-suffix:
+        type: string
+        description: Suffix appended to GitHub artifact archive with spread artifacts
+        required: false
+        default: ""
+      snap-artifact-name:
+        type: string
+        description: Name of the artifact containing the snap file (e.g., snap-x86_64)
+        required: false
+        default: ""
+      snap-filename:
+        type: string
+        description: Filename of the snap to download and test
+        required: false
+        default: ""
+
+jobs:
+  spread:
+    name: spread (${{ inputs.job-arch }}) - ${{ inputs.spread-system }}
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Download snap artifact
+        if: ${{ inputs.snap-artifact-name != '' }}
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ inputs.snap-artifact-name }}
+          path: .
+
+      - name: Work around a bug in snapd suspend logic
+        run: |
+          echo "::group::Work around a bug in snapd suspend logic"
+          sudo mkdir -p /etc/systemd/system/snapd.service.d
+          (
+            echo "[Service]"
+            echo "Environment=SNAPD_STANDBY_WAIT=15m"
+          ) | sudo tee /etc/systemd/system/snapd.service.d/standby.conf
+          sudo systemctl daemon-reload
+          sudo systemctl restart snapd.service
+          echo "::endgroup::"
+
+      - name: Install snapd snap
+        uses: ./.github/actions/install-cached-snap
+        with:
+          snap-name: snapd
+          channel: ${{ inputs.snapd-channel }}
+          enable-cache: ${{ inputs.cache-host-snaps }}
+
+      - name: Install core24 snap
+        uses: ./.github/actions/install-cached-snap
+        with:
+          snap-name: core24
+          channel: ${{ inputs.core24-channel }}
+          enable-cache: ${{ inputs.cache-host-snaps }}
+
+      - name: Resolve spread configuration
+        id: spread-config
+        shell: bash
+        run: |
+          set -euo pipefail
+          spread_arch="${{ inputs.spread-arch }}"
+          spread_variant="${{ inputs.spread-variant }}"
+          spread_live="${{ inputs.spread-live }}"
+          image_garden_components="${{ inputs.image-garden-components }}"
+
+          case "$spread_variant" in
+            "")
+              spread_component="spread"
+              ;;
+            plus)
+              spread_component="spread-plus"
+              ;;
+            *)
+              echo "::error::Unsupported spread-variant: $spread_variant"
+              exit 1
+              ;;
+          esac
+
+          if [ "$spread_live" = "true" ] && [ "$spread_variant" != "plus" ]; then
+            echo "::error::spread-live requires spread-variant=plus"
+            exit 1
+          fi
+
+          if [ -z "$image_garden_components" ]; then
+            image_garden_components="qemu-${spread_arch//_/-},${spread_component}"
+          fi
+
+          echo "image-garden-components=$image_garden_components" >> "$GITHUB_OUTPUT"
+
+      - name: Install image-garden snap
+        uses: ./.github/actions/install-cached-snap
+        with:
+          snap-name: image-garden
+          channel: ${{ inputs.image-garden-channel }}
+          components: ${{ steps.spread-config.outputs.image-garden-components }}
+          enable-cache: ${{ inputs.cache-host-snaps }}
+
+      - name: Cache pristine virtual machine images
+        if: ${{ fromJSON(inputs.cache-pristine-images) }}
+        uses: actions/cache@v5
+        with:
+          path: ~/snap/image-garden/common/cache/dl
+          key: image-garden-dl-${{ inputs.spread-system }}-${{ inputs.spread-arch }}
+
+      - name: Cache prepared virtual machine images
+        uses: actions/cache@v5
+        if: ${{ fromJSON(inputs.cache-prepared-images) }}
+        with:
+          path: |
+            .image-garden
+            !.image-garden/*.log
+          key: image-garden-img-${{ inputs.spread-system }}-${{ inputs.spread-arch }}
+
+      - name: Make permissions on /dev/kvm more lax
+        run: |
+          if [ -c /dev/kvm ]; then
+            sudo chmod -v 666 /dev/kvm
+          fi
+
+      - name: Use spread from image-garden snap
+        run: sudo snap alias image-garden.spread spread
+
+      - name: Configure spread variant
+        if: ${{ inputs.spread-variant != '' }}
+        run: sudo snap set image-garden spread-variant=${{ inputs.spread-variant }}
+
+      - name: Make the virtual machine image (dry run)
+        run: |
+          echo "::group::Make the virtual machine image (dry run)"
+          mkdir -p ~/snap/image-garden/common/cache/dl
+          image-garden make --debug --dry-run \
+            ${{ inputs.spread-system }}.${{ inputs.spread-arch }}.qcow2
+          echo "::endgroup::"
+
+      - name: Make the virtual machine image
+        run: |
+          echo "::group::Make the virtual machine image"
+          image-garden make \
+            ${{ inputs.spread-system }}.${{ inputs.spread-arch }}.qcow2 \
+            ${{ inputs.spread-system }}.${{ inputs.spread-arch }}.run \
+            ${{ inputs.spread-system }}.${{ inputs.spread-arch }}.user-data \
+            ${{ inputs.spread-system }}.${{ inputs.spread-arch }}.meta-data \
+            ${{ inputs.spread-system }}.${{ inputs.spread-arch }}.seed.iso
+          echo "::endgroup::"
+
+      - name: Rebase the virtual machine image
+        if: ${{ fromJSON(inputs.cache-prepared-images) }}
+        run: |
+          image-garden rebase ${{ inputs.spread-system }}.${{ inputs.spread-arch }}.qcow2
+
+      - name: Run integration tests
+        env:
+          SPREAD_ARCH: ${{ inputs.spread-arch }}
+        run: |
+          set +e
+          spread \
+            ${{ inputs.spread-artifacts && format('-artifacts {0}', inputs.spread-artifacts) || '' }} \
+            -v ${{ fromJSON(inputs.spread-live) && '-live ' || '' }}${{ inputs.spread-system }}:${{ inputs.spread-tasks }} \
+            2>&1 | tee spread.log
+          SPREAD_EXIT_CODE=${PIPESTATUS[0]}
+          set -e
+          exit $SPREAD_EXIT_CODE
+
+      - name: Upload spread log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: spread-log-${{ inputs.spread-artifacts-suffix || inputs.spread-system }}
+          path: spread.log
+          if-no-files-found: ignore
+
+      - name: Rename artifacts for GitHub compatibility
+        if: ${{ inputs.spread-artifacts }}
+        shell: bash
+        run: |
+          find "${{ inputs.spread-artifacts }}" -depth -name '*:*' -execdir bash -c 'mv -v "$1" "${1//:/_}"' bash "{}" \;
+
+      - name: Upload spread artifacts
+        if: ${{ inputs.spread-artifacts }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: spread-artifacts-${{ inputs.spread-artifacts-suffix ||
+            inputs.spread-system }}
+          path: ${{ inputs.spread-artifacts }}
+
+      - name: Upload logs as artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: boot-logs
+          path: .image-garden/*.log
+          if-no-files-found: ignore
