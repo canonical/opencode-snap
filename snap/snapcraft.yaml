@@ -1,11 +1,11 @@
 name: opencode
 base: core24
-adopt-info: opencode
+version: 1.14.41
 title: OpenCode
 summary: Open source AI coding agent for the terminal
 description: |
   OpenCode is an open source AI coding agent for terminal workflows.
-  This snap packages the upstream npm distribution (opencode-ai).
+  This snap packages the upstream prebuilt binaries from the opencode-ai GitHub releases.
 license: Apache-2.0
 contact: https://github.com/anomalyco/opencode/issues
 website: https://opencode.ai
@@ -17,36 +17,21 @@ confinement: classic
 
 apps:
   opencode:
-    command: bin/opencode-launcher
+    command: bin/opencode
     completer: usr/share/bash-completion/completions/opencode.opencode
 
 parts:
   opencode:
-    plugin: npm
-    source: snap/npm
-    override-build: |
-      craftctl default
-      version="$(node -p "require('$CRAFT_PART_INSTALL/lib/node_modules/opencode-snap-wrapper/node_modules/opencode-ai/package.json').version")"
-      craftctl set version="$version"
-      find "$CRAFT_PART_INSTALL/lib/node_modules/opencode-snap-wrapper/node_modules" -maxdepth 1 -name '*-musl' -exec rm -rf {} +
-      rm -rf "$CRAFT_PART_INSTALL/lib/node_modules/opencode-snap-wrapper/node_modules/.bin"
-      rm -rf "$CRAFT_PART_INSTALL/lib/node_modules/opencode-snap-wrapper/node_modules/opencode-ai"
-      # We cannot patchelf the prebuilt binaries as this corrupts the elf structure.
-      # patchelf \
-      #   --set-interpreter /snap/core24/current/lib64/ld-linux-x86-64.so.2 \
-      #   --set-rpath /snap/core24/current/lib/x86_64-linux-gnu \
-      #   "$CRAFT_PART_INSTALL/lib/node_modules/opencode-snap-wrapper/node_modules/opencode-linux-x64/bin/opencode"
-      # patchelf \
-      #   --set-interpreter /snap/core24/current/lib64/ld-linux-x86-64.so.2 \
-      #   --set-rpath /snap/core24/current/lib/x86_64-linux-gnu \
-      #   "$CRAFT_PART_INSTALL/lib/node_modules/opencode-snap-wrapper/node_modules/opencode-linux-x64-baseline/bin/opencode"
-    build-packages:
-      - npm
-      - patchelf
+    plugin: dump
+    source:
+      - on amd64 to amd64: https://github.com/anomalyco/opencode/releases/download/v1.14.41/opencode-linux-x64-baseline.tar.gz
+      - on arm64 to arm64: https://github.com/anomalyco/opencode/releases/download/v1.14.41/opencode-linux-arm64.tar.gz
+    source-type: tar
+    organize:
+      opencode: bin/opencode
 
-  launcher:
+  completion:
     plugin: nil
     source: snap/local
     override-build: |
-      install -Dm755 "$CRAFT_PART_SRC/opencode-launcher" "$CRAFT_PART_INSTALL/bin/opencode-launcher"
       install -Dm644 "$CRAFT_PART_SRC/opencode.opencode" "$CRAFT_PART_INSTALL/usr/share/bash-completion/completions/opencode.opencode"

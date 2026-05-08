@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+if grep -qiE '(^|[[:space:]])avx2([[:space:]]|$)' /proc/cpuinfo; then
+    exec "$SNAP/libexec/opencode.avx2" "$@"
+fi
+
+exec "$SNAP/libexec/opencode.baseline" "$@"

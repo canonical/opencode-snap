@@ -10,7 +10,7 @@ _opencode() {
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="$($SNAP/bin/openshell opencode --get-yargs-completions "${COMP_WORDS[@]}")"
+    opts="$($SNAP/bin/opencode --get-yargs-completions "${COMP_WORDS[@]}")"
     COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
     return 0
 }
