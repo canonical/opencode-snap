@@ -1,6 +1,6 @@
 name: opencode
 base: core24
-version: 1.14.41
+adopt-info: opencode
 title: OpenCode
 summary: Open source AI coding agent for the terminal
 description: |
@@ -27,6 +27,9 @@ parts:
       - on amd64 to amd64: https://github.com/anomalyco/opencode/releases/download/v1.14.41/opencode-linux-x64-baseline.tar.gz
       - on arm64 to arm64: https://github.com/anomalyco/opencode/releases/download/v1.14.41/opencode-linux-arm64.tar.gz
     source-type: tar
+    override-pull: |
+      craftctl default
+      craftctl set version=$(./opencode -v)
     organize:
       opencode: bin/opencode
 
