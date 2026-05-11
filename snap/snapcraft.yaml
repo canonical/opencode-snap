@@ -26,7 +26,7 @@ platforms:
 
 apps:
   opencode:
-    command: bin/opencode
+    command: bin/opencode.wrapper
     completer: usr/share/bash-completion/completions/opencode.opencode
 
 parts:
@@ -79,3 +79,5 @@ parts:
     override-build: |
       install -Dm644 "$CRAFT_PART_SRC"/opencode.opencode \
         "$CRAFT_PART_INSTALL"/usr/share/bash-completion/completions/opencode.opencode
+      install -Dm755 "$CRAFT_PART_SRC"/opencode.wrapper \
+        "$CRAFT_PART_INSTALL"/bin/opencode.wrapper

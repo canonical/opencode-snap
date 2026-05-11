@@ -1,0 +1,12 @@
+#!/bin/sh
+# Wrapper script for opencode to unset SNAP environment variables
+
+# Save the path to the actual binary
+BIN="$SNAP/bin/opencode"
+
+# Unset all environment variables starting with SNAP
+for var in $(env | cut -d= -f1 | grep '^SNAP'); do
+    unset "$var"
+done
+
+exec "$BIN" "$@"
