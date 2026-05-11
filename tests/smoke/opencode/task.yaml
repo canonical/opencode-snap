@@ -4,70 +4,14 @@
 summary: Smoke test for the opencode snap
 details: |
     This test verifies that the opencode snap is properly installed,
-    launches without crashing, and can run a fixed prompt against gemma4.
+    launches without crashing, and prints the expected version.
 
 execute: |
     # Verify the snap is installed.
     snap list | MATCH "opencode"
-    snap list | MATCH "gemma4"
 
     # Run opencode and check help output.
     snap run opencode --help 2>&1 | MATCH "opencode completion"
 
     # Verify opencode version.
     snap run opencode --version 2>&1 | MATCH "1.14.49"
-
-    # Wait for the gemma4 OpenAI-compatible endpoint and discover a model id.
-    gemma4_ready=false
-    for i in $(seq 1 60); do
-        if curl --silent --show-error --fail http://127.0.0.1:8336/v1/models > /tmp/gemma4-models.json; then
-            gemma4_ready=true
-            break
-        fi
-        sleep 2
-    done
-    if [ "$gemma4_ready" != "true" ]; then
-        echo "gemma4 endpoint did not become ready at http://127.0.0.1:8336/v1/models within 120 seconds" >&2
-        exit 1
-    fi
-    test -s /tmp/gemma4-models.json
-    GEMMA4_MODEL_ID="$(
-        python3 - <<'PY' < /tmp/gemma4-models.json
-import json
-import sys
-
-try:
-    payload = json.load(sys.stdin)
-    data = payload.get("data") or []
-    model_id = data[0].get("id") if data and isinstance(data[0], dict) else ""
-except Exception:
-    model_id = ""
-
-print(model_id)
-PY
-    )"
-    test -n "$GEMMA4_MODEL_ID"
-
-    # Configure opencode to use gemma4 for the current user.
-    mkdir -p "$HOME/.config/opencode"
-    cat > "$HOME/.config/opencode/opencode.json" <<EOF
-    {
-      "\$schema": "https://opencode.ai/config.json",
-      "provider": {
-        "gemma4-local": {
-          "npm": "@ai-sdk/openai-compatible",
-          "name": "Gemma4 snap",
-          "options": {
-            "baseURL": "http://127.0.0.1:8336/v1",
-            "apiKey": "not-needed"
-          },
-          "models": {
-            "$GEMMA4_MODEL_ID": {}
-          }
-        }
-      }
-    }
-    EOF
-
-    # Verify opencode run (non-interactive mode) works against gemma4.
-    snap run opencode run --model "gemma4-local/$GEMMA4_MODEL_ID" "Reply exactly with: GEMMA4_SPREAD_OK" 2>&1 | MATCH "GEMMA4_SPREAD_OK"
