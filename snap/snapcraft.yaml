@@ -1,19 +1,28 @@
 name: opencode
 base: core24
-version: 1.14.41
 title: OpenCode
 summary: Open source AI coding agent for the terminal
 description: |
   OpenCode is an open source AI coding agent for terminal workflows. This snap
-  packages the upstream prebuilt binaries from the opencode-ai GitHub releases.
+  builds opencode from source using Bun, packaging both baseline and AVX2
+  optimized Linux binaries.
 license: Apache-2.0
 contact: https://github.com/anomalyco/opencode/issues
 website: https://opencode.ai
 source-code: https://github.com/anomalyco/opencode
 issues: https://github.com/anomalyco/opencode/issues
+adopt-info: opencode
 
 grade: stable
 confinement: classic
+
+platforms:
+  amd64:
+    build-on: [amd64]
+    build-for: [amd64]
+  arm64:
+    build-on: [arm64]
+    build-for: [arm64]
 
 apps:
   opencode:
@@ -21,17 +30,52 @@ apps:
     completer: usr/share/bash-completion/completions/opencode.opencode
 
 parts:
-  opencode:
+  bun:
     plugin: dump
     source:
-      - on amd64 to amd64: https://github.com/anomalyco/opencode/releases/download/v1.14.41/opencode-linux-x64-baseline.tar.gz
-      - on arm64 to arm64: https://github.com/anomalyco/opencode/releases/download/v1.14.41/opencode-linux-arm64.tar.gz
-    source-type: tar
-    organize:
-      opencode: bin/opencode
+      - on amd64 to amd64: https://github.com/oven-sh/bun/releases/download/bun-v1.3.13/bun-linux-x64.zip
+      - on arm64 to arm64: https://github.com/oven-sh/bun/releases/download/bun-v1.3.13/bun-linux-aarch64.zip
+    override-build: |
+      install -Dm755 "${CRAFT_PART_SRC}"/bun-linux-*/bun /usr/local/bin/bun
+
+  opencode:
+    after:
+      - bun
+    plugin: nil
+    source: https://github.com/anomalyco/opencode
+    source-type: git
+    source-tag: v1.14.48
+    override-build: |
+      # Use bun from build environment
+      echo "Using bun: $(bun --version)"
+
+      # Install workspace dependencies
+      bun install --frozen-lockfile
+
+      VERSION=$(bun -e "console.log(require('./packages/opencode/package.json').version)")
+      craftctl set version="$VERSION"
+
+      # Build opencode from source
+      export OPENCODE_CHANNEL=latest
+      cd packages/opencode
+
+      # Build baseline binary (for CPUs without AVX2)
+      echo "Building baseline binary..."
+      bun run script/build.ts --baseline
+
+      # Install the binary
+      case "$CRAFT_ARCH_BUILD_FOR" in
+        amd64)
+          install -Dm755 dist/opencode-linux-x64-baseline/bin/opencode "${CRAFT_PART_INSTALL}"/bin/opencode
+          ;;
+        arm64)
+          install -Dm755 dist/opencode-linux-arm64/bin/opencode "${CRAFT_PART_INSTALL}"/bin/opencode
+          ;;
+      esac
 
   completion:
     plugin: nil
     source: snap/local
     override-build: |
-      install -Dm644 "$CRAFT_PART_SRC/opencode.opencode" "$CRAFT_PART_INSTALL/usr/share/bash-completion/completions/opencode.opencode"
+      install -Dm644 "$CRAFT_PART_SRC"/opencode.opencode \
+        "$CRAFT_PART_INSTALL"/usr/share/bash-completion/completions/opencode.opencode

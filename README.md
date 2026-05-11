@@ -3,10 +3,9 @@
 This repository contains snap packaging for
 [opencode-ai](https://github.com/anomalyco/opencode).
 
-It does not build opencode from source. Instead, it downloads a single prebuilt
-binary from the upstream [GitHub
-releases](https://github.com/anomalyco/opencode/releases) and packages it into
-a snap.
+It builds opencode from source using the [Bun](https://bun.sh) runtime.
+At present only the baselien (no AVX2) binary is compiled and packaged.
+In the future we will package the AVX2 binary as snap architecture variant.
 
 ## Building
 
@@ -16,11 +15,8 @@ snapcraft pack
 
 ## Updating the version
 
-The version is pinned in `snap/snapcraft.yaml` — the version string in each
-source URL (currently `1.14.41`).
-
-To update to a new upstream release, change the version in all source URLs and
-commit.
+The version is determined by selecting the Git tag of opencode.
+To update to a new upstream release just change that and commit.
 
 ## Testing with spread
 
