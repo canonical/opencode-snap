@@ -241,7 +241,7 @@ jobs:
     name: snapcraft upload
     # Upload built snaps only after smoke testing the amd64 build first.
     # When spread tests are skipped, proceed directly after packing is complete.
-    if: ${{ always() }}
+    if: ${{ !failure() }}
     needs: [snapcraft-pack-amd64, snapcraft-pack-arm64, spread-amd64]
     uses: ./.github/workflows/snapcraft-upload.yml
     with:
