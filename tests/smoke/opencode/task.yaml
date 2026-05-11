@@ -4,14 +4,50 @@
 summary: Smoke test for the opencode snap
 details: |
     This test verifies that the opencode snap is properly installed,
-    launches without crashing, and prints help output.
+    launches without crashing, and can run a fixed prompt against gemma4.
 
 execute: |
     # Verify the snap is installed.
     snap list | MATCH "opencode"
+    snap list | MATCH "gemma4"
 
     # Run opencode and check help output.
     snap run opencode --help 2>&1 | MATCH "opencode completion"
 
-    # Verify opencode run (non-interactive mode) works.
+    # Verify opencode version.
     snap run opencode --version 2>&1 | MATCH "1.14.49"
+
+    # Wait for the gemma4 OpenAI-compatible endpoint and discover a model id.
+    for i in $(seq 1 60); do
+        if curl --silent --show-error --fail http://127.0.0.1:8336/v1/models > /tmp/gemma4-models.json; then
+            break
+        fi
+        sleep 2
+    done
+    test -s /tmp/gemma4-models.json
+    GEMMA4_MODEL_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"][0]["id"])' < /tmp/gemma4-models.json)"
+    test -n "$GEMMA4_MODEL_ID"
+
+    # Configure opencode to use gemma4 for the current user.
+    mkdir -p "$HOME/.config/opencode"
+    cat > "$HOME/.config/opencode/opencode.json" <<EOF
+    {
+      "\$schema": "https://opencode.ai/config.json",
+      "provider": {
+        "gemma4-local": {
+          "npm": "@ai-sdk/openai-compatible",
+          "name": "Gemma4 snap",
+          "options": {
+            "baseURL": "http://127.0.0.1:8336/v1",
+            "apiKey": "not-needed"
+          },
+          "models": {
+            "$GEMMA4_MODEL_ID": {}
+          }
+        }
+      }
+    }
+    EOF
+
+    # Verify opencode run (non-interactive mode) works against gemma4.
+    snap run opencode run --model "gemma4-local/$GEMMA4_MODEL_ID" "Reply exactly with: GEMMA4_SPREAD_OK" 2>&1 | MATCH "GEMMA4_SPREAD_OK"
