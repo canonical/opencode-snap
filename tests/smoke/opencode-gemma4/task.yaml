@@ -24,21 +24,7 @@ execute: |
         exit 1
     fi
     test -s /tmp/gemma4-models.json
-    GEMMA4_MODEL_ID="$(
-        python3 - <<'PY' < /tmp/gemma4-models.json
-import json
-import sys
-
-try:
-    payload = json.load(sys.stdin)
-    data = payload.get("data") or []
-    model_id = data[0].get("id") if data and len(data) > 0 and isinstance(data[0], dict) else ""
-except Exception:
-    model_id = ""
-
-print(model_id)
-PY
-    )"
+    GEMMA4_MODEL_ID="$(python3 tests/smoke/opencode-gemma4/get-model-id.py < /tmp/gemma4-models.json)"
     test -n "$GEMMA4_MODEL_ID"
 
     # Configure opencode to use gemma4 for the current user.
