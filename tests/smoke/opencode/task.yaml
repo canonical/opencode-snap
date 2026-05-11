@@ -18,14 +18,34 @@ execute: |
     snap run opencode --version 2>&1 | MATCH "1.14.49"
 
     # Wait for the gemma4 OpenAI-compatible endpoint and discover a model id.
+    gemma4_ready=false
     for i in $(seq 1 60); do
         if curl --silent --show-error --fail http://127.0.0.1:8336/v1/models > /tmp/gemma4-models.json; then
+            gemma4_ready=true
             break
         fi
         sleep 2
     done
+    if [ "$gemma4_ready" != "true" ]; then
+        echo "gemma4 endpoint did not become ready at http://127.0.0.1:8336/v1/models within 120 seconds" >&2
+        exit 1
+    fi
     test -s /tmp/gemma4-models.json
-    GEMMA4_MODEL_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"][0]["id"])' < /tmp/gemma4-models.json)"
+    GEMMA4_MODEL_ID="$(
+        python3 - <<'PY' < /tmp/gemma4-models.json
+import json
+import sys
+
+try:
+    payload = json.load(sys.stdin)
+    data = payload.get("data") or []
+    model_id = data[0].get("id") if data and isinstance(data[0], dict) else ""
+except Exception:
+    model_id = ""
+
+print(model_id)
+PY
+    )"
     test -n "$GEMMA4_MODEL_ID"
 
     # Configure opencode to use gemma4 for the current user.
