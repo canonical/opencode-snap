@@ -44,7 +44,7 @@ parts:
     plugin: nil
     source: https://github.com/anomalyco/opencode
     source-type: git
-    source-tag: v1.14.47
+    source-tag: v1.14.48
     override-build: |
       # Use bun from build environment
       echo "Using bun: $(bun --version)"
