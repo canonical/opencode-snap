@@ -47,12 +47,15 @@ parts:
     source: https://github.com/anomalyco/opencode
     source-type: git
     source-tag: v1.15.3
-    override-build: |
+    override-pull: |
+      craftctl default
+
       # Use bun from build environment
       echo "Using bun: $(bun --version)"
 
       # Install workspace dependencies
       bun install --frozen-lockfile
+    override-build: |
 
       VERSION=$(bun -e "console.log(require('./packages/opencode/package.json').version)")
       craftctl set version="$VERSION"
