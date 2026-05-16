@@ -28,6 +28,8 @@ apps:
   opencode:
     command: bin/opencode.wrapper
     completer: usr/share/bash-completion/completions/opencode.opencode
+    environment:
+      OPENCODE_DISABLE_AUTOUPDATE: 1
 
 parts:
   bun:
