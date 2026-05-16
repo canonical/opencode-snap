@@ -56,12 +56,15 @@ parts:
       # Install workspace dependencies
       bun install --frozen-lockfile
     override-build: |
+      # Set OPENCODE_VERSION so that the resulting binary will know its version.
+      # For details see node_modules/@opencode-ai/script/package.json
+      OPENCODE_VERSION=$(bun -e "console.log(require('./packages/opencode/package.json').version)")
+      export OPENCODE_VERSION
 
-      VERSION=$(bun -e "console.log(require('./packages/opencode/package.json').version)")
-      craftctl set version="$VERSION"
+      # Set snap version to the same value.
+      craftctl set version="$OPENCODE_VERSION"
 
       # Build opencode from source
-      export OPENCODE_CHANNEL=latest
       cd packages/opencode
 
       # Build baseline binary (for CPUs without AVX2)
