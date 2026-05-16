@@ -38,7 +38,7 @@ path: /root/opencode-snap
 
 prepare: |
     # Install the snap that was copied into the test environment.
-    snap install ./opencode_*.snap --dangerous --classic
+    snap install "$(ls ./opencode_*.snap | sort -r | head -n 1)" --dangerous --classic
 
 debug-each: |
     echo "Kernel and architecture:"
