@@ -13,7 +13,7 @@
       ],
       "matchStrings": [
         "(?m)opencode:[\\s\\S]*?source-tag:\\s*v(?<currentValue>[^\\s]+)",
-        "MATCH \"(?<currentValue>[0-9.]+)\""
+        "opencode --version 2>&1 \\| MATCH \"(?<currentValue>[0-9.]+)\""
       ],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "anomalyco/opencode",
