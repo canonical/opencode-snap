@@ -3,17 +3,35 @@
   "extends": [
     "config:recommended"
   ],
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/bower_components/**",
+    "**/vendor/**",
+    "**/examples/**",
+    "**/__fixtures__/**"
+  ],
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Update opencode",
+      "description": "Update opencode version in snapcraft.yaml",
       "managerFilePatterns": [
-        "snap/snapcraft.yaml",
-        "tests/smoke/opencode/task.yaml"
+        "snap/snapcraft\\.yaml"
       ],
       "matchStrings": [
-        "(?m)opencode:[\\s\\S]*?source-tag:\\s*v(?<currentValue>[^\\s]+)",
-        ".*opencode --version 2>&1 \\| MATCH \"(?<currentValue>[0-9.]+)\""
+        "source-tag:\\s*v(?<currentValue>[^\\s]+)"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "anomalyco/opencode",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "Update opencode version in task.yaml",
+      "managerFilePatterns": [
+        "tests/smoke/opencode/task\\.yaml"
+      ],
+      "matchStrings": [
+        "opencode --version 2>&1 \\| MATCH \"(?<currentValue>[0-9.]+)\""
       ],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "anomalyco/opencode",
@@ -23,7 +41,7 @@
       "customType": "regex",
       "description": "Update bun",
       "managerFilePatterns": [
-        "snap/snapcraft.yaml"
+        "snap/snapcraft\\.yaml"
       ],
       "matchStrings": [
         "https://github\\.com/oven-sh/bun/releases/download/bun-v(?<currentValue>[^/]+)/bun-linux-"
