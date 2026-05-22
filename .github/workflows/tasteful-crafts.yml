@@ -239,9 +239,8 @@ jobs:
   #   --acls=package_upload,package_release <token-name>
   snapcraft-upload:
     name: snapcraft upload
-    # Upload built snaps only after smoke testing the amd64 build first.
-    # When spread tests are skipped, proceed directly after packing is complete.
-    if: ${{ !failure() }}
+    # Only publish on pushes/tags, never on pull requests.
+    if: ${{ !failure() && github.event_name != 'pull_request' }}
     needs: [snapcraft-pack-amd64, snapcraft-pack-arm64, spread-amd64]
     uses: ./.github/workflows/snapcraft-upload.yml
     with:
