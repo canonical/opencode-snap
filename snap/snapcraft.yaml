@@ -6,6 +6,9 @@ description: |
   OpenCode is an open source AI coding agent for terminal workflows. This snap
   builds opencode from source using Bun, packaging both baseline and AVX2
   optimized Linux binaries.
+
+  The snap packaging is maintained separately at
+  https://github.com/canonical/opencode-snap
 license: Apache-2.0
 contact: https://github.com/anomalyco/opencode/issues
 website: https://opencode.ai
