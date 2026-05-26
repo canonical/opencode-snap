@@ -1,0 +1,18 @@
+#!/bin/sh
+BIN="$SNAP/../components/$SNAP_REVISION/desktop/@opencode-aidesktop"
+
+if [ ! -f "$BIN" ]; then
+    snapctl install +desktop
+fi
+
+if [ ! -f "$BIN" ]; then
+    echo "OpenCode Desktop component is not installed." >&2
+    echo "Install it with: snap install opencode+desktop" >&2
+    exit 1
+fi
+
+for var in $(env | cut -d= -f1 | grep '^SNAP'); do
+    unset "$var"
+done
+
+exec "$BIN" "$@"
