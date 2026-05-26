@@ -3,9 +3,8 @@ base: core24
 title: OpenCode
 summary: Open source AI coding agent for the terminal
 description: |
-  OpenCode is an open source AI coding agent for terminal workflows. This snap
-  builds opencode from source using Bun, packaging both baseline and AVX2
-  optimized Linux binaries.
+  OpenCode is an open source AI coding agent with desktop GUI support. This snap
+  packages both the CLI and desktop GUI built from source using Bun.
 
   The snap packaging is maintained separately at
   https://github.com/canonical/opencode-snap
@@ -14,10 +13,16 @@ contact: https://github.com/anomalyco/opencode/issues
 website: https://opencode.ai
 source-code: https://github.com/anomalyco/opencode
 issues: https://github.com/anomalyco/opencode/issues
-adopt-info: opencode
+adopt-info: opencode-cli
 
 grade: stable
 confinement: classic
+
+components:
+  desktop:
+    type: standard
+    summary: OpenCode Desktop GUI
+    description: Desktop GUI application for OpenCode.
 
 platforms:
   amd64:
@@ -33,6 +38,9 @@ apps:
     completer: usr/share/bash-completion/completions/opencode.opencode
     environment:
       OPENCODE_DISABLE_AUTOUPDATE: 1
+  desktop:
+    command: bin/opencode-desktop.wrapper
+    desktop: usr/share/applications/opencode_desktop.desktop
 
 parts:
   bun:
@@ -42,14 +50,20 @@ parts:
       - on arm64 to arm64: https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-linux-aarch64.zip
     override-build: |
       install -Dm755 "${CRAFT_PART_SRC}"/bun-linux-*/bun /usr/local/bin/bun
+      ln -sf /usr/local/bin/bun /usr/local/bin/bunx
 
-  opencode:
+  opencode-cli:
     after:
       - bun
     plugin: nil
     source: https://github.com/anomalyco/opencode
     source-type: git
     source-tag: v1.15.10
+    build-packages:
+      - build-essential
+    build-environment:
+      - OPENCODE_CHANNEL: prod
+      - SENTRY_AUTH_TOKEN: ""
     override-build: |
       # Use bun from build environment
       echo "Using bun: $(bun --version)"
@@ -65,14 +79,14 @@ parts:
       # Set snap version to the same value.
       craftctl set version="$OPENCODE_VERSION"
 
-      # Build opencode from source
+      # Build opencode CLI from source
       cd packages/opencode
 
       # Build baseline binary (for CPUs without AVX2)
       echo "Building baseline binary..."
       bun run script/build.ts --baseline
 
-      # Install the binary
+      # Install the CLI binary
       case "$CRAFT_ARCH_BUILD_FOR" in
         amd64)
           install -Dm755 dist/opencode-linux-x64-baseline/bin/opencode "${CRAFT_PART_INSTALL}"/bin/opencode
@@ -81,6 +95,74 @@ parts:
           install -Dm755 dist/opencode-linux-arm64/bin/opencode "${CRAFT_PART_INSTALL}"/bin/opencode
           ;;
       esac
+
+  opencode-desktop:
+    after:
+      - bun
+    plugin: nil
+    source: https://github.com/anomalyco/opencode
+    source-type: git
+    source-tag: v1.15.10
+    build-packages:
+      - build-essential
+    build-environment:
+      - OPENCODE_CHANNEL: prod
+      - SENTRY_AUTH_TOKEN: ""
+    organize:
+      "electron/": "(component/desktop)/"
+    override-build: |
+      # Use bun from build environment
+      echo "Using bun: $(bun --version)"
+
+      # Install workspace dependencies
+      bun install --frozen-lockfile
+
+      # Build desktop GUI from source
+      cd packages/desktop
+
+      # Build electron app (dir target for portable output)
+      bun ./scripts/prebuild.ts
+      bun run build
+
+      # Disable auto-updater for the snap
+      sed -i 's/\(var\|let\|const\) UPDATER_ENABLED = .*/const UPDATER_ENABLED = false/' out/main/index.js
+
+      # Patch package.json to use opencode_desktop name (no @ character)
+      # so the Wayland app ID matches the snap-installed desktop file name
+      sed -i 's/"@opencode-aidesktop"/"opencode_desktop"/' package.json
+
+      bunx electron-builder --linux dir --publish never --config electron-builder.config.ts
+
+      # electron-builder dir target outputs to dist/linux-unpacked/ (or linux-<arch>-unpacked on arm64)
+      _LINUX_DIR=$(find "$CRAFT_PART_BUILD/packages/desktop/dist" -maxdepth 1 -name "linux-unpacked" -type d 2>/dev/null | head -1)
+      if [ -z "$_LINUX_DIR" ]; then
+        _LINUX_DIR=$(find "$CRAFT_PART_BUILD/packages/desktop/dist" -maxdepth 1 -name "linux-*-unpacked" -type d 2>/dev/null | head -1)
+      fi
+      if [ -z "$_LINUX_DIR" ]; then
+        _LINUX_DIR=$(find "$CRAFT_PART_BUILD" -path "*/packages/desktop/dist/linux-unpacked" -type d 2>/dev/null | head -1)
+      fi
+      if [ -z "$_LINUX_DIR" ]; then
+        _LINUX_DIR=$(find "$CRAFT_PART_BUILD" -path "*/packages/desktop/dist/linux-*-unpacked" -type d 2>/dev/null | head -1)
+      fi
+      if [ -z "$_LINUX_DIR" ]; then
+        echo "ERROR: No linux-unpacked directory found."
+        echo "Contents of packages/desktop/dist/:"
+        ls -la "$CRAFT_PART_BUILD/packages/desktop/dist/" 2>/dev/null || true
+        echo "Contents of dist/:"
+        ls -la "$CRAFT_PART_BUILD/dist/" 2>/dev/null || true
+        exit 1
+      fi
+      echo "Using linux-unpacked: $_LINUX_DIR"
+
+      # Copy electron app into the snap install tree under electron/
+      # so organize can route it to the component directory
+      install -dm755 "$CRAFT_PART_INSTALL/electron/"
+      for item in "$_LINUX_DIR"/*; do cp -r "$item" "$CRAFT_PART_INSTALL/electron/"; done
+
+      # Install icons (staged to prime for use by opencode-configuration)
+      install -Dm644 "$CRAFT_PART_SRC/packages/desktop/icons/prod/icon.png" "$CRAFT_PART_INSTALL/meta/gui/icon.png"
+      install -dm755 "$CRAFT_PART_INSTALL/usr/share/icons/hicolor/128x128/apps"
+      install -Dm644 "$CRAFT_PART_SRC/packages/desktop/icons/prod/128x128.png" "$CRAFT_PART_INSTALL/usr/share/icons/hicolor/128x128/apps/opencode_desktop.png"
 
   wl-clipboard:
     plugin: meson
@@ -118,7 +200,10 @@ parts:
         --set-rpath /snap/core24/current/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR \
         $CRAFT_PART_INSTALL/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/libwayland-client.so.0.*
 
-  completion:
+  opencode-configuration:
+    after:
+      - opencode-cli
+      - opencode-desktop
     plugin: nil
     source: snap/local
     override-build: |
@@ -126,3 +211,20 @@ parts:
         "$CRAFT_PART_INSTALL"/usr/share/bash-completion/completions/opencode.opencode
       install -Dm755 "$CRAFT_PART_SRC"/opencode.wrapper \
         "$CRAFT_PART_INSTALL"/bin/opencode.wrapper
+      install -Dm755 "$CRAFT_PART_SRC"/opencode-desktop.wrapper \
+        "$CRAFT_PART_INSTALL"/bin/opencode-desktop.wrapper
+
+      # Install .desktop file
+      mkdir -p "$CRAFT_PART_INSTALL/usr/share/applications"
+      printf '%s\n' \
+        '[Desktop Entry]' \
+        'Name=OpenCode Desktop' \
+        'Comment=OpenCode AI Coding Agent' \
+        'Exec=env BAMF_DESKTOP_FILE_HINT=/var/lib/snapd/desktop/applications/opencode_desktop.desktop ${SNAP}/bin/opencode-desktop.wrapper %U' \
+        'Icon=${SNAP}/meta/gui/icon.png' \
+        'Terminal=false' \
+        'Type=Application' \
+        'Categories=Development;IDE;' \
+        'MimeType=x-scheme-handler/opencode;' \
+        'StartupWMClass=opencode_desktop' \
+        > "$CRAFT_PART_INSTALL/usr/share/applications/opencode_desktop.desktop"

@@ -4,7 +4,7 @@ This repository contains snap packaging for
 [opencode-ai](https://github.com/anomalyco/opencode).
 
 It builds opencode from source using the [Bun](https://bun.sh) runtime.
-At present only the baselien (no AVX2) binary is compiled and packaged.
+At present only the baseline (no AVX2) binary is compiled and packaged.
 In the future we will package the AVX2 binary as snap architecture variant.
 
 ## Building
