@@ -134,22 +134,22 @@ parts:
       bunx electron-builder --linux dir --publish never --config electron-builder.config.ts
 
       # electron-builder dir target outputs to dist/linux-unpacked/ (or linux-<arch>-unpacked on arm64)
-      _LINUX_DIR=$(find "$CRAFT_PART_BUILD/packages/desktop/dist" -maxdepth 1 -name "linux-unpacked" -type d 2>/dev/null | head -1)
-      if [ -z "$_LINUX_DIR" ]; then
-        _LINUX_DIR=$(find "$CRAFT_PART_BUILD/packages/desktop/dist" -maxdepth 1 -name "linux-*-unpacked" -type d 2>/dev/null | head -1)
-      fi
-      if [ -z "$_LINUX_DIR" ]; then
-        _LINUX_DIR=$(find "$CRAFT_PART_BUILD" -path "*/packages/desktop/dist/linux-unpacked" -type d 2>/dev/null | head -1)
-      fi
-      if [ -z "$_LINUX_DIR" ]; then
-        _LINUX_DIR=$(find "$CRAFT_PART_BUILD" -path "*/packages/desktop/dist/linux-*-unpacked" -type d 2>/dev/null | head -1)
-      fi
-      if [ -z "$_LINUX_DIR" ]; then
-        echo "ERROR: No linux-unpacked directory found."
+      case "$CRAFT_ARCH_BUILD_FOR" in
+        amd64)
+          _LINUX_DIR="$CRAFT_PART_BUILD/packages/desktop/dist/linux-unpacked"
+          ;;
+        arm64)
+          _LINUX_DIR="$CRAFT_PART_BUILD/packages/desktop/dist/linux-arm64-unpacked"
+          ;;
+        *)
+          # Fallback: try to find any linux-unpacked directory
+          _LINUX_DIR=$(find "$CRAFT_PART_BUILD/packages/desktop/dist" -maxdepth 1 -name "linux-*-unpacked" -type d 2>/dev/null | head -1)
+          ;;
+      esac
+      if [ -z "$_LINUX_DIR" ] || [ ! -d "$_LINUX_DIR" ]; then
+        echo "ERROR: No linux-unpacked directory found for $CRAFT_ARCH_BUILD_FOR."
         echo "Contents of packages/desktop/dist/:"
         ls -la "$CRAFT_PART_BUILD/packages/desktop/dist/" 2>/dev/null || true
-        echo "Contents of dist/:"
-        ls -la "$CRAFT_PART_BUILD/dist/" 2>/dev/null || true
         exit 1
       fi
       echo "Using linux-unpacked: $_LINUX_DIR"
