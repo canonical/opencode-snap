@@ -127,9 +127,9 @@ parts:
       # Disable auto-updater for the snap
       sed -i 's/\(var\|let\|const\) UPDATER_ENABLED = .*/const UPDATER_ENABLED = false/' out/main/index.js
 
-      # Patch package.json to use opencode_desktop name (no @ character)
-      # so the Wayland app ID matches the snap-installed desktop file name
-      sed -i 's/"@opencode-aidesktop"/"opencode_desktop"/' package.json
+      # Set desktopName so Electron generates the correct desktop file ID
+      # that matches the snap-installed opencode_desktop.desktop file
+      sed -i '/"homepage"/a\  "desktopName": "opencode_desktop",' package.json
 
       bunx electron-builder --linux dir --publish never --config electron-builder.config.ts
 
