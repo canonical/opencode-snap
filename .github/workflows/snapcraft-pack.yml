@@ -151,13 +151,40 @@ jobs:
             echo "No component files generated"
           fi
 
+      - name: Organize artifacts into per-architecture directory
+        id: arch-dir
+        shell: bash
+        run: |
+          SNAP_FILE=$(ls -1 *.snap 2>/dev/null | head -1)
+          if [ -z "$SNAP_FILE" ]; then
+            echo "ERROR: No snap file generated"
+            exit 1
+          fi
+          # Determine target arch from the snap filename
+          case "$SNAP_FILE" in
+            *amd64*) ARCH=amd64 ;;
+            *arm64*) ARCH=arm64 ;;
+            *)
+              echo "::warning::Could not determine arch from snap filename, defaulting to arch"
+              ARCH=arch
+              ;;
+          esac
+          echo "Architecture: $ARCH (from $SNAP_FILE)"
+          # Create architecture-specific directory and move artifacts into it
+          mkdir -p "$ARCH"
+          mv *.snap "$ARCH/" 2>/dev/null || true
+          mv *.comp "$ARCH/" 2>/dev/null || true
+          echo "arch-dir=$ARCH" >> $GITHUB_OUTPUT
+          echo "Moved artifacts to $ARCH/"
+          ls -la "$ARCH/"
+
       - name: Upload snap artifact
         uses: actions/upload-artifact@v7
         with:
           name: snap-${{ steps.arch.outputs.ARCH }}
           path: |
-            *.snap
-            *.comp
+            ${{ steps.arch-dir.outputs.arch-dir }}/*.snap
+            ${{ steps.arch-dir.outputs.arch-dir }}/*.comp
           retention-days: 7
 
       - name: Upload snapcraft logs on failure
