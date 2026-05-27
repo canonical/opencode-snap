@@ -38,18 +38,7 @@ path: /root/opencode-snap
 
 prepare: |
     # Install the snap that was copied into the test environment.
-    SNAP_ARCH=$(uname -m)
-    case "$SNAP_ARCH" in
-        x86_64) SNAP_ARCH=amd64 ;;
-        aarch64) SNAP_ARCH=arm64 ;;
-    esac
-    SNAP_FILE="$(ls -1 ./"${SNAP_ARCH}"/opencode_*.snap 2>/dev/null | sort -r | head -n 1)"
-    if [ -z "$SNAP_FILE" ]; then
-        echo "ERROR: No snap file found for architecture $SNAP_ARCH" >&2
-        exit 1
-    fi
-    echo "Installing: $SNAP_FILE"
-    snap install "$SNAP_FILE" --dangerous --classic
+    snap install "$(ls ./opencode_*.snap | sort -r | head -n 1)" --dangerous --classic
 
 debug-each: |
     echo "Kernel and architecture:"
