@@ -100,13 +100,14 @@ jobs:
         with:
           pattern: ${{ inputs.artifact-pattern }}
           path: ./snaps/
-          merge-multiple: true
+          merge-multiple: false
 
       - name: Release to ${{ inputs.snapstore-channel }}
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.publish-credentials }}
           SNAP_CHANNEL: ${{ inputs.snapstore-channel }}
         run: |
+          set -x
           shopt -s nullglob globstar
 
           for SNAP_FILE in ./snaps/**/*.snap; do
