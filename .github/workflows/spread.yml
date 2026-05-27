@@ -234,6 +234,11 @@ jobs:
         run: |
           image-garden rebase ${{ inputs.spread-system }}.${{ inputs.spread-arch }}.qcow2
 
+      - name: Debug — list snap and component files
+        run: |
+          echo "=== Full directory listing ==="
+          find . -maxdepth 2 \( -name "*.snap" -o -name "*.comp" \) -ls 2>/dev/null || true
+
       - name: Run integration tests
         env:
           SPREAD_ARCH: ${{ inputs.spread-arch }}
