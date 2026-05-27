@@ -16,4 +16,4 @@ for var in $(env | cut -d= -f1 | grep '^SNAP'); do
     unset "$var"
 done
 
-exec "$BIN" "$@"
+exec "$BIN" --no-sandbox "$@"
