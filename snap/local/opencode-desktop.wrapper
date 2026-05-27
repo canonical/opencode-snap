@@ -2,6 +2,7 @@
 BIN="$SNAP/../components/$SNAP_REVISION/desktop/@opencode-aidesktop"
 
 if [ ! -f "$BIN" ]; then
+    echo "Installing OpenCode Desktop component..." >&2
     snapctl install +desktop
 fi
 
