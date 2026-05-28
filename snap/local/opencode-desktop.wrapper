@@ -2,13 +2,18 @@
 BIN="$SNAP/../components/$SNAP_REVISION/desktop/@opencode-aidesktop"
 
 if [ ! -f "$BIN" ]; then
-    echo "Installing OpenCode Desktop component..." >&2
-    snapctl install +desktop
-fi
-
-if [ ! -f "$BIN" ]; then
-    echo "OpenCode Desktop component is not installed." >&2
-    echo "Install it with: snap install opencode+desktop" >&2
+    ICON="${SNAP}/meta/gui/icon.png"
+    if command -v zenity >/dev/null 2>&1; then
+        zenity --error \
+            --title="OpenCode Desktop" \
+            --text="The OpenCode Desktop component is not installed.\n\nPlease install it using:\n  snap install opencode+desktop" \
+            --icon="${ICON}" \
+            --width=340 \
+            --height=160 || true
+    else
+        echo "OpenCode Desktop component is not installed." >&2
+        echo "Install it with: snap install opencode+desktop" >&2
+    fi
     exit 1
 fi
 
