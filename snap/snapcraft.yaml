@@ -58,7 +58,7 @@ parts:
     plugin: nil
     source: https://github.com/anomalyco/opencode
     source-type: git
-    source-tag: v1.17.0
+    source-tag: v1.17.3
     build-packages:
       - build-essential
     build-environment:
@@ -102,7 +102,7 @@ parts:
     plugin: nil
     source: https://github.com/anomalyco/opencode
     source-type: git
-    source-tag: v1.17.0
+    source-tag: v1.17.3
     build-packages:
       - build-essential
     build-environment:
