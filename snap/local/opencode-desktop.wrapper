@@ -1,5 +1,5 @@
 #!/bin/sh
-BIN="$SNAP/../components/$SNAP_REVISION/desktop/@opencode-aidesktop"
+BIN="$SNAP/../components/$SNAP_REVISION/desktop/ai.opencode.desktop"
 
 if [ ! -f "$BIN" ]; then
     ICON="${SNAP}/meta/gui/icon.png"
