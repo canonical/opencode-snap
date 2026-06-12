@@ -40,6 +40,9 @@ prepare: |
     # Install the snap that was copied into the test environment.
     snap install "$(ls ./opencode_*.snap | sort -r | head -n 1)" --dangerous --classic
 
+    # Install the desktop component built alongside the snap.
+    snap install "$(ls ./opencode+desktop*.comp | sort -r | head -n 1)" --dangerous
+
 debug-each: |
     echo "Kernel and architecture:"
     uname -a
