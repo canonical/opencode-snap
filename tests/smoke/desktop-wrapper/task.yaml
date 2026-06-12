@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: Canonical Ltd.
+# SPDX-License-Identifier: Apache-2.0
+
+summary: Verify desktop wrapper binary path exists after installing +desktop component
+details: |
+    This test verifies that the binary path used in the opencode-desktop.wrapper
+    script is present and executable after installing the snap and the +desktop
+    component.
+
+execute: |
+    # Derive the SNAP directory from the snap mount point (spread tests do not
+    # have $SNAP set since they run outside the snap invocation context).
+    SNAP="/snap/opencode/current"
+
+    # Get the snap revision for the opencode snap.
+    SNAP_REVISION=$(snap list opencode | awk 'NR==2 {print $3}')
+
+    # Extract the BIN variable from the desktop wrapper and evaluate it with
+    # the actual SNAP/SNAP_REVISION values. This ensures the test checks the
+    # exact path the wrapper will use at runtime.
+    WRAPPER_BIN=$(grep '^BIN=' "$SNAP/bin/opencode-desktop.wrapper" | head -1 | sed 's/^BIN=//; s/^"//; s/"$//')
+    # Replace $SNAP_REVISION first so that $SNAP doesn't partially match it.
+    BIN="${WRAPPER_BIN//\$SNAP_REVISION/$SNAP_REVISION}"
+    BIN="${BIN//\$SNAP/$SNAP}"
+
+    # Verify the binary exists at the path from the wrapper.
+    if [ ! -f "$BIN" ]; then
+        echo "ERROR: Desktop binary not found at: $BIN" >&2
+        echo "Wrapper script:" >&2
+        cat "$SNAP/bin/opencode-desktop.wrapper" >&2
+        echo "" >&2
+        echo "Contents of components directory:" >&2
+        ls -la "$SNAP/../components/$SNAP_REVISION/desktop/" 2>&1 || true
+        exit 1
+    fi
+
+    # Verify the binary is executable.
+    if [ ! -x "$BIN" ]; then
+        echo "ERROR: Desktop binary is not executable: $BIN" >&2
+        exit 1
+    fi
