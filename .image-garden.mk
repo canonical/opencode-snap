@@ -4,6 +4,16 @@
 define DEBIAN_CLOUD_INIT_USER_DATA_TEMPLATE
 $(CLOUD_INIT_USER_DATA_TEMPLATE)
 - snap wait system seed.loaded
+- snap install --beta snapd
+- snap install core24
+packages:
+- snapd
+endef
+
+define UBUNTU_CLOUD_INIT_USER_DATA_TEMPLATE
+$(CLOUD_INIT_USER_DATA_TEMPLATE)
+- snap wait system seed.loaded
+- snap install --beta snapd
 - snap install core24
 packages:
 - snapd
