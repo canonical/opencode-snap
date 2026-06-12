@@ -127,9 +127,10 @@ parts:
       # Disable auto-updater for the snap
       sed -i 's/\(var\|let\|const\) UPDATER_ENABLED = .*/const UPDATER_ENABLED = false/' out/main/index.js
 
-      # Set desktopName so Electron generates the correct desktop file ID
-      # that matches the snap-installed opencode_desktop.desktop file
-      sed -i '/"homepage"/a\  "desktopName": "opencode_desktop",' package.json
+      # Override prod appId so electron-builder uses opencode_desktop everywhere
+      # (extraMetadata.desktopName, executableName, StartupWMClass).
+      # This matches the snap-installed opencode_desktop.desktop file.
+      sed -i 's/prod: "ai\.opencode\.desktop"/prod: "opencode_desktop"/' electron-builder.config.ts
 
       bunx electron-builder --linux dir --publish never --config electron-builder.config.ts
 
