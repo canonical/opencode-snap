@@ -63,7 +63,7 @@ jobs:
       deployment: ${{ inputs.github-deployment }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.0
 
       - name: Install snapd snap
         uses: ./.github/actions/install-cached-snap
