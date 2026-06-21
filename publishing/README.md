@@ -36,3 +36,20 @@ Save the contents of each credential file as a secret named
 
 These environments can also have approval rules attached so that publishing
 or promotion requires manual review.
+
+## GitHub Releases from Renovate PRs
+
+Use `.github/workflows/release.yml` to create Git tags and GitHub releases with
+release notes aggregated from merged Renovate PRs.
+
+- Trigger manually from **Actions -> release -> Run workflow**
+  - `version`: tag to create (for example `v1.15.11`)
+  - `target`: branch to tag from (defaults to `main`)
+- You can also push a tag manually (`git tag vX.Y.Z && git push origin vX.Y.Z`);
+  the workflow runs on `v*` tags and will create or update the matching release.
+
+Release notes behavior:
+
+- Only merged PRs authored by `renovate[bot]` are included
+- The workflow looks for a `Release Notes` or `Changelog` section in each PR body
+- If no section is found, it falls back to PR title and link

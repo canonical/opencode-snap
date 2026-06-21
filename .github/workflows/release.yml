@@ -1,0 +1,240 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: Canonical Ltd.
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release tag to create (for example v1.15.11)
+        required: true
+        type: string
+      target:
+        description: Branch to tag from
+        required: false
+        default: main
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: create release notes
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Resolve release context
+        id: context
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const isDispatch = context.eventName === "workflow_dispatch";
+            const version = isDispatch ? context.payload.inputs?.version : context.ref.replace("refs/tags/", "");
+            const target = isDispatch ? (context.payload.inputs?.target || "main") : context.payload.repository.default_branch;
+
+            if (!version || !/^v\d+\.\d+\.\d+(?:[-+].*)?$/.test(version)) {
+              core.setFailed(`Invalid tag '${version}'. Use format v<major>.<minor>.<patch>.`);
+              return;
+            }
+
+            core.setOutput("tag", version);
+            core.setOutput("target", target);
+
+      - name: Create tag from target branch
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/github-script@v8
+        env:
+          RELEASE_TAG: ${{ steps.context.outputs.tag }}
+          TARGET_BRANCH: ${{ steps.context.outputs.target }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const tag = process.env.RELEASE_TAG;
+            const targetBranch = process.env.TARGET_BRANCH;
+
+            const branch = await github.rest.repos.getBranch({
+              owner,
+              repo,
+              branch: targetBranch,
+            });
+            const sha = branch.data.commit.sha;
+
+            try {
+              await github.rest.git.createRef({
+                owner,
+                repo,
+                ref: `refs/tags/${tag}`,
+                sha,
+              });
+              core.info(`Created tag ${tag} at ${targetBranch} (${sha}).`);
+            } catch (error) {
+              if (error.status === 422) {
+                core.info(`Tag ${tag} already exists, skipping tag creation.`);
+              } else {
+                throw error;
+              }
+            }
+
+      - name: Build release notes and upsert release
+        uses: actions/github-script@v8
+        env:
+          RELEASE_TAG: ${{ steps.context.outputs.tag }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const currentTag = process.env.RELEASE_TAG;
+
+            function parseSemver(tag) {
+              const m = /^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(tag);
+              if (!m) return null;
+              return {
+                major: Number(m[1]),
+                minor: Number(m[2]),
+                patch: Number(m[3]),
+              };
+            }
+
+            function compareSemver(a, b) {
+              if (a.major !== b.major) return a.major - b.major;
+              if (a.minor !== b.minor) return a.minor - b.minor;
+              return a.patch - b.patch;
+            }
+
+            function extractNotes(prBody) {
+              if (!prBody) return null;
+
+              const section = /(?:^|\n)#{2,6}\s*(?:Release Notes?|Changelog)\s*\n([\s\S]*?)(?=\n#{2,6}\s+\S|$)/i.exec(prBody);
+              if (!section) return null;
+
+              const cleaned = section[1].trim();
+              return cleaned.length > 0 ? cleaned : null;
+            }
+
+            async function listAllTags() {
+              return github.paginate(github.rest.repos.listTags, {
+                owner,
+                repo,
+                per_page: 100,
+              });
+            }
+
+            const tags = await listAllTags();
+            const semverTags = tags
+              .map((t) => ({ name: t.name, parsed: parseSemver(t.name) }))
+              .filter((t) => t.parsed !== null)
+              .sort((a, b) => compareSemver(a.parsed, b.parsed));
+
+            const currentParsed = parseSemver(currentTag);
+            const previous = currentParsed
+              ? semverTags
+                .filter((t) => t.name !== currentTag)
+                .filter((t) => compareSemver(t.parsed, currentParsed) < 0)
+                .at(-1)
+              : semverTags.filter((t) => t.name !== currentTag).at(-1);
+            const previousTag = previous ? previous.name : null;
+
+            core.info(previousTag
+              ? `Using previous tag ${previousTag}`
+              : "No previous semver tag found; release notes will include only a fallback message.");
+
+            const prMap = new Map();
+
+            if (previousTag) {
+              const comparison = await github.rest.repos.compareCommitsWithBasehead({
+                owner,
+                repo,
+                basehead: `${previousTag}...${currentTag}`,
+              });
+
+              for (const commit of comparison.data.commits) {
+                const pulls = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                  owner,
+                  repo,
+                  commit_sha: commit.sha,
+                  per_page: 100,
+                });
+
+                for (const pr of pulls.data) {
+                  if (!pr.merged_at) continue;
+                  if (pr.user?.login !== "renovate[bot]") continue;
+                  prMap.set(pr.number, pr);
+                }
+              }
+            }
+
+            const renovatePrs = [...prMap.values()].sort((a, b) => {
+              return new Date(a.merged_at).getTime() - new Date(b.merged_at).getTime();
+            });
+
+            const lines = [];
+            lines.push("## Renovate updates");
+            lines.push("");
+
+            if (renovatePrs.length === 0) {
+              lines.push("No Renovate pull requests were detected for this release range.");
+              lines.push("");
+            }
+
+            for (const pr of renovatePrs) {
+              lines.push(`### #${pr.number} ${pr.title}`);
+              lines.push(`- PR: ${pr.html_url}`);
+
+              const extracted = extractNotes(pr.body || "");
+              if (extracted) {
+                lines.push("");
+                lines.push(extracted);
+              } else {
+                lines.push("- No changelog section found in PR body.");
+              }
+
+              lines.push("");
+            }
+
+            const body = lines.join("\n").trim();
+
+            try {
+              const existing = await github.rest.repos.getReleaseByTag({
+                owner,
+                repo,
+                tag: currentTag,
+              });
+
+              await github.rest.repos.updateRelease({
+                owner,
+                repo,
+                release_id: existing.data.id,
+                tag_name: currentTag,
+                name: currentTag,
+                body,
+                draft: false,
+                prerelease: false,
+              });
+
+              core.info(`Updated release for ${currentTag}.`);
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+
+              await github.rest.repos.createRelease({
+                owner,
+                repo,
+                tag_name: currentTag,
+                name: currentTag,
+                body,
+                draft: false,
+                prerelease: false,
+              });
+
+              core.info(`Created release for ${currentTag}.`);
+            }
