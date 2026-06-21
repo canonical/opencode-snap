@@ -48,6 +48,86 @@ jobs:
             core.setOutput("tag", version);
             core.setOutput("target", target);
 
+      - name: Validate release tag against packaged and upstream versions
+        uses: actions/github-script@v8
+        env:
+          RELEASE_TAG: ${{ steps.context.outputs.tag }}
+          TARGET_REF: ${{ github.event_name == 'workflow_dispatch' && steps.context.outputs.target || steps.context.outputs.tag }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const releaseTag = process.env.RELEASE_TAG;
+            const targetRef = process.env.TARGET_REF;
+
+            function parseSemver(tag) {
+              const m = /^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(tag || "");
+              if (!m) return null;
+              return {
+                major: Number(m[1]),
+                minor: Number(m[2]),
+                patch: Number(m[3]),
+              };
+            }
+
+            function compareSemver(a, b) {
+              if (a.major !== b.major) return a.major - b.major;
+              if (a.minor !== b.minor) return a.minor - b.minor;
+              return a.patch - b.patch;
+            }
+
+            const content = await github.rest.repos.getContent({
+              owner,
+              repo,
+              path: "snap/snapcraft.yaml",
+              ref: targetRef,
+            });
+
+            if (!("content" in content.data)) {
+              core.setFailed("Could not read snap/snapcraft.yaml from target ref.");
+              return;
+            }
+
+            const snapcraft = Buffer.from(content.data.content, "base64").toString("utf8");
+            const upstreamSourceTagMatches = [
+              ...snapcraft.matchAll(/source:\s*https:\/\/github\.com\/anomalyco\/opencode[\s\S]*?source-tag:\s*(v[^\s#]+)/g),
+            ].map((m) => m[1]);
+
+            const uniquePackagedTags = [...new Set(upstreamSourceTagMatches)];
+            if (uniquePackagedTags.length !== 1) {
+              core.setFailed(`Expected exactly one packaged opencode source-tag, found: ${uniquePackagedTags.join(", ") || "none"}.`);
+              return;
+            }
+
+            const packagedTag = uniquePackagedTags[0];
+
+            const upstreamLatest = await github.rest.repos.getLatestRelease({
+              owner: "anomalyco",
+              repo: "opencode",
+            });
+            const upstreamLatestTag = upstreamLatest.data.tag_name;
+
+            const releaseParsed = parseSemver(releaseTag);
+            const packagedParsed = parseSemver(packagedTag);
+            const upstreamParsed = parseSemver(upstreamLatestTag);
+
+            if (!releaseParsed || !packagedParsed || !upstreamParsed) {
+              core.setFailed(`Could not parse one of the tags as semver: release=${releaseTag}, packaged=${packagedTag}, upstream=${upstreamLatestTag}.`);
+              return;
+            }
+
+            if (releaseTag !== packagedTag) {
+              core.setFailed(`Release tag ${releaseTag} must exactly match packaged opencode source-tag ${packagedTag} from snap/snapcraft.yaml.`);
+              return;
+            }
+
+            if (compareSemver(releaseParsed, upstreamParsed) > 0) {
+              core.setFailed(`Release tag ${releaseTag} must not be newer than upstream opencode latest release ${upstreamLatestTag}.`);
+              return;
+            }
+
+            core.info(`Validated release tag ${releaseTag} against packaged tag ${packagedTag} and upstream latest ${upstreamLatestTag}.`);
+
       - name: Create tag from target branch
         if: ${{ github.event_name == 'workflow_dispatch' }}
         uses: actions/github-script@v8
@@ -84,7 +164,7 @@ jobs:
               }
             }
 
-      - name: Build release notes and upsert release
+      - name: Build release notes and create or update release
         uses: actions/github-script@v8
         env:
           RELEASE_TAG: ${{ steps.context.outputs.tag }}
@@ -113,10 +193,22 @@ jobs:
             function extractNotes(prBody) {
               if (!prBody) return null;
 
-              const section = /(?:^|\n)#{2,6}\s*(?:Release Notes?|Changelog)\s*\n([\s\S]*?)(?=\n#{2,6}\s+\S|$)/i.exec(prBody);
-              if (!section) return null;
+              const headingMatch = /(?:^|\n)#{2,6}\s*(?:Release Notes?|Changelog)\s*\n/i.exec(prBody);
+              if (!headingMatch || headingMatch.index === undefined) return null;
 
-              const cleaned = section[1].trim();
+              const start = headingMatch.index + headingMatch[0].length;
+              const rest = prBody.slice(start);
+
+              const delimiterIndex = rest.search(/\n---\n/);
+              const section = delimiterIndex >= 0 ? rest.slice(0, delimiterIndex) : rest;
+
+              const cleaned = section
+                .replace(/<details>/gi, "")
+                .replace(/<\/details>/gi, "")
+                .replace(/<summary>([\s\S]*?)<\/summary>/gi, (_m, title) => `#### ${String(title).trim()}`)
+                .replace(/\n{3,}/g, "\n\n")
+                .trim();
+
               return cleaned.length > 0 ? cleaned : null;
             }
 

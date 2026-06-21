@@ -52,4 +52,10 @@ Release notes behavior:
 
 - Only merged PRs authored by `renovate[bot]` are included
 - The workflow looks for a `Release Notes` or `Changelog` section in each PR body
+- Nested Renovate `<details>` sections are flattened into readable markdown
 - If no section is found, it falls back to PR title and link
+
+Tag safety checks:
+
+- The release tag must exactly match the packaged opencode `source-tag` in `snap/snapcraft.yaml`
+- The release tag must not be newer than the latest upstream `anomalyco/opencode` release
