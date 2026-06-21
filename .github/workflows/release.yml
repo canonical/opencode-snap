@@ -33,7 +33,7 @@ jobs:
     steps:
       - name: Resolve release context
         id: context
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const isDispatch = context.eventName === "workflow_dispatch";
@@ -49,7 +49,7 @@ jobs:
             core.setOutput("target", target);
 
       - name: Validate release tag against packaged and upstream versions
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           RELEASE_TAG: ${{ steps.context.outputs.tag }}
           TARGET_REF: ${{ github.event_name == 'workflow_dispatch' && steps.context.outputs.target || steps.context.outputs.tag }}
@@ -130,7 +130,7 @@ jobs:
 
       - name: Create tag from target branch
         if: ${{ github.event_name == 'workflow_dispatch' }}
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           RELEASE_TAG: ${{ steps.context.outputs.tag }}
           TARGET_BRANCH: ${{ steps.context.outputs.target }}
@@ -165,7 +165,7 @@ jobs:
             }
 
       - name: Build release notes and create or update release
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           RELEASE_TAG: ${{ steps.context.outputs.tag }}
         with:
