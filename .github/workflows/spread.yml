@@ -183,13 +183,13 @@ jobs:
 
       - name: Cache pristine virtual machine images
         if: ${{ fromJSON(inputs.cache-pristine-images) }}
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/snap/image-garden/common/cache/dl
           key: image-garden-dl-${{ inputs.spread-system }}-${{ inputs.spread-arch }}
 
       - name: Cache prepared virtual machine images
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         if: ${{ fromJSON(inputs.cache-prepared-images) }}
         with:
           path: |
