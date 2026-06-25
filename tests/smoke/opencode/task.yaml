@@ -14,4 +14,4 @@ execute: |
     snap run opencode --help 2>&1 | MATCH "opencode completion"
 
     # Verify opencode run (non-interactive mode) works.
-    snap run opencode --version 2>&1 | MATCH "1.17.9"
+    snap run opencode --version 2>&1 | MATCH "1.17.11"
