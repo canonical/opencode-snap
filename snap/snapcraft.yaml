@@ -14,6 +14,7 @@ website: https://opencode.ai
 source-code: https://github.com/anomalyco/opencode
 issues: https://github.com/anomalyco/opencode/issues
 adopt-info: opencode-cli
+assumes: [snapd2.76]
 
 grade: stable
 confinement: classic
