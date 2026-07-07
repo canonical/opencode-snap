@@ -19,6 +19,7 @@ issues: https://github.com/anomalyco/opencode/issues
 # "0.0.0-next-15495"), because npm pre-release versions are CI build counters,
 # not the actual product version.
 adopt-info: opencode-cli
+assumes: [snapd2.76]
 
 grade: stable
 confinement: classic
