@@ -26,6 +26,19 @@
     },
     {
       "customType": "regex",
+      "description": "Update opencode source-commit in snapcraft.yaml (v2 dev branch)",
+      "managerFilePatterns": [
+        "snap/snapcraft\\.yaml"
+      ],
+      "matchStrings": [
+        "source-commit:\\s*(?<currentValue>[a-f0-9]{40})"
+      ],
+      "datasourceTemplate": "github-commits",
+      "depNameTemplate": "anomalyco/opencode",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
       "description": "Update opencode version in task.yaml",
       "managerFilePatterns": [
         "tests/smoke/opencode/task\\.yaml"
