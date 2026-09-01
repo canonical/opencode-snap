@@ -25,12 +25,12 @@ inputs:
     default: ":3142"
   binary-cache-key:
     description: >-
-      actions/cache key prefix for the built pkgproxy binary. Bump it when the
-      pinned version changes so a stale binary isn't restored. CPU arch is
-      appended (amd64/arm64 share the Linux OS label, and GitHub only isolates
-      caches by OS, not arch, by default).
+      actions/cache key prefix for the built pkgproxy binary. The pinned version
+      and CPU arch are appended automatically (amd64/arm64 share the Linux OS
+      label, and GitHub only isolates caches by OS, not arch, by default), so
+      bumping version alone busts the cache — no manual key edit needed.
     required: false
-    default: pkgproxy-bin-v5
+    default: pkgproxy-bin
   package-cache-key:
     description: >-
       actions/cache key prefix for the pkgproxy payload cache
@@ -80,7 +80,7 @@ runs:
         # default isolation is by OS only, not arch), but runner.os and a per-run
         # id are deliberately omitted: the former is redundant, the latter would
         # make an immutable cache that's never reused in place.
-        echo "binary-key=${{ inputs.binary-cache-key }}-${{ runner.arch }}" >> "$GITHUB_OUTPUT"
+        echo "binary-key=${{ inputs.binary-cache-key }}-${{ inputs.version }}-${{ runner.arch }}" >> "$GITHUB_OUTPUT"
         echo "package-cache-key-success=${{ inputs.package-cache-key }}-${{ runner.arch }}-success" >> "$GITHUB_OUTPUT"
         echo "package-cache-key-partial=${{ inputs.package-cache-key }}-${{ runner.arch }}-partial" >> "$GITHUB_OUTPUT"
 

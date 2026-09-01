@@ -63,7 +63,7 @@ jobs:
         id: pkgproxy
         uses: ./.github/actions/setup-pkgproxy
         with:
-          version: v0.0.0-20260901193356-848d1c0f4249
+          version: v0.6.0
 
       - name: Install lxd snap
         shell: bash
