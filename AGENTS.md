@@ -38,16 +38,17 @@ Reusable actions live under `.github/actions/`:
 
 | Action                | Purpose                                                                                                                          |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `install-cached-snap` | Download and install a snap with an actions/cache download cache (used by spread/upload/promote)                                |
-| `setup-pkgproxy`      | Build and run [pkgproxy](https://gitlab.com/zygoon/pkgproxy) as a caching proxy for apt/snap/go/LXD traffic, with a persistent payload cache; used by `snapcraft-pack.yml` |
+| `setup-pkgproxy`      | Build and run [pkgproxy](https://gitlab.com/zygoon/pkgproxy) as a caching proxy for apt/snap/go/LXD traffic, with a persistent payload cache; used by `snapcraft-pack.yml`, `snapcraft-upload.yml`, `snapcraft-promote.yml`, and `spread.yml` |
 
-`setup-pkgproxy` builds a pinned pkgproxy commit (see its `version` input),
-restores `/var/cache/pkgproxy`, starts the daemon via `systemd-run`, and points
-the host's apt/snapd at the proxy. It exposes `package-cache-key-success` /
-`package-cache-key-partial` outputs so the caller saves the payload cache under
-the same key the restore used. Snapcraft-specific LXD wiring (the build
-container profile, pre-start hook, and image remote) stays in
-`snapcraft-pack.yml`.
+`setup-pkgproxy` builds a pinned pkgproxy version (its `version` input, a git
+tag or Go pseudo-version), installs the binary to `/usr/local/bin`, installs a
+`pkgproxy.service` systemd unit whose `RuntimeDirectory=`/`CacheDirectory=`
+create `/run/pkgproxy` and `/var/cache/pkgproxy`, starts the daemon, and points
+the host's apt/snapd at the proxy. It exposes `package-cache-hit` and
+`package-cache-key-success` / `package-cache-key-partial` outputs so the caller
+saves the payload cache under the same stable per-arch key the restore used,
+only on a cache miss. Snapcraft-specific LXD wiring (the build container
+profile, pre-start hook, and image remote) stays in `snapcraft-pack.yml`.
 
 ### Renovate
 

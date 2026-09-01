@@ -9,12 +9,16 @@ on:
         type: string
         description: Architecture label used in the GitHub job name
         required: true
-      cache-host-snaps:
+      enable-pkgproxy:
         type: boolean
-        description: "Whether to cache host snaps (snapd, core22, core24) during
-          installation"
+        description: "Whether to route snap store downloads through a pkgproxy caching proxy during installation"
         required: false
         default: true
+      pkgproxy-version:
+        type: string
+        description: "pkgproxy version to build for the caching proxy (a git tag or Go pseudo-version)"
+        required: false
+        default: v0.6.0
       cache-pristine-images:
         type: boolean
         description: Use GitHub cache to store pristine images (recommended)
@@ -125,19 +129,18 @@ jobs:
           sudo systemctl restart snapd.service
           echo "::endgroup::"
 
-      - name: Install snapd snap
-        uses: ./.github/actions/install-cached-snap
+      - name: Set up pkgproxy caching proxy
+        if: ${{ fromJSON(inputs.enable-pkgproxy) }}
+        id: pkgproxy
+        uses: ./.github/actions/setup-pkgproxy
         with:
-          snap-name: snapd
-          channel: ${{ inputs.snapd-channel }}
-          enable-cache: ${{ inputs.cache-host-snaps }}
+          version: ${{ inputs.pkgproxy-version }}
 
-      - name: Install core24 snap
-        uses: ./.github/actions/install-cached-snap
-        with:
-          snap-name: core24
-          channel: ${{ inputs.core24-channel }}
-          enable-cache: ${{ inputs.cache-host-snaps }}
+      - name: Install snapd and core24 snaps
+        shell: bash
+        run: |
+          sudo snap install snapd --channel "${{ inputs.snapd-channel }}"
+          sudo snap install core24 --channel "${{ inputs.core24-channel }}"
 
       - name: Resolve spread configuration
         id: spread-config
@@ -174,12 +177,21 @@ jobs:
           echo "image-garden-components=$image_garden_components" >> "$GITHUB_OUTPUT"
 
       - name: Install image-garden snap
-        uses: ./.github/actions/install-cached-snap
-        with:
-          snap-name: image-garden
-          channel: ${{ inputs.image-garden-channel }}
-          components: ${{ steps.spread-config.outputs.image-garden-components }}
-          enable-cache: ${{ inputs.cache-host-snaps }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Install image-garden and its components from the store (cached through
+          # pkgproxy when enabled). Components install via the snap+comp... form.
+          TARGET="image-garden"
+          COMPONENTS='${{ steps.spread-config.outputs.image-garden-components }}'
+          if [ -n "$COMPONENTS" ]; then
+            IFS=',' read -r -a COMPS <<<"$COMPONENTS"
+            for c in "${COMPS[@]}"; do
+              c="${c//[[:space:]]/}"
+              [ -n "$c" ] && TARGET+="+$c"
+            done
+          fi
+          sudo snap install "$TARGET" --channel "${{ inputs.image-garden-channel }}"
 
       - name: Cache pristine virtual machine images
         if: ${{ fromJSON(inputs.cache-pristine-images) }}
@@ -281,3 +293,19 @@ jobs:
           name: boot-logs
           path: .image-garden/*.log
           if-no-files-found: ignore
+
+      - name: Prepare pkgproxy package cache for GitHub cache save
+        if: ${{ fromJSON(inputs.enable-pkgproxy) && always() }}
+        shell: bash
+        run: |
+          sudo systemctl stop pkgproxy.service || true
+          sudo chown -R "$USER:$USER" /var/cache/pkgproxy
+
+      # Save only when the stable success key wasn't an exact hit (GitHub caches
+      # are immutable; a warm cache needs no rewrite).
+      - name: Save pkgproxy package cache
+        if: ${{ fromJSON(inputs.enable-pkgproxy) && steps.pkgproxy.outputs.package-cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: /var/cache/pkgproxy
+          key: ${{ steps.pkgproxy.outputs.package-cache-key-success }}
