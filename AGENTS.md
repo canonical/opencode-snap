@@ -32,6 +32,23 @@ The `build.yml` entrypoint runs when `snap/snapcraft.yaml`, `spread.yaml`,
 `tests/**`, or `.image-garden.mk` change. It triggers on push to `main`,
 `master`, `develop`, and on `v*` tags, as well as on pull requests.
 
+### Composite actions
+
+Reusable actions live under `.github/actions/`:
+
+| Action                | Purpose                                                                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `install-cached-snap` | Download and install a snap with an actions/cache download cache (used by spread/upload/promote)                                |
+| `setup-pkgproxy`      | Build and run [pkgproxy](https://gitlab.com/zygoon/pkgproxy) as a caching proxy for apt/snap/go/LXD traffic, with a persistent payload cache; used by `snapcraft-pack.yml` |
+
+`setup-pkgproxy` builds a pinned pkgproxy commit (see its `version` input),
+restores `/var/cache/pkgproxy`, starts the daemon via `systemd-run`, and points
+the host's apt/snapd at the proxy. It exposes `package-cache-key-success` /
+`package-cache-key-partial` outputs so the caller saves the payload cache under
+the same key the restore used. Snapcraft-specific LXD wiring (the build
+container profile, pre-start hook, and image remote) stays in
+`snapcraft-pack.yml`.
+
 ### Renovate
 
 Renovate is configured via `renovate.json` to bump dependencies (bun) and opencode

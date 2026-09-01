@@ -58,97 +58,12 @@ jobs:
         id: arch
         run: echo "ARCH=$(uname -m)" >> $GITHUB_OUTPUT
 
-      - name: Restore pkgproxy binary cache
+      - name: Set up pkgproxy caching proxy
         if: ${{ fromJSON(inputs.enable-pkgproxy) }}
-        id: pkgproxy-binary-cache
-        uses: actions/cache/restore@v6
+        id: pkgproxy
+        uses: ./.github/actions/setup-pkgproxy
         with:
-          path: .cache/pkgproxy-bin
-          key: pkgproxy-bin-v5-${{ runner.os }}-${{ inputs.job-arch }}
-
-      - name: Set up Go for pkgproxy
-        if: ${{ fromJSON(inputs.enable-pkgproxy) && steps.pkgproxy-binary-cache.outputs.cache-hit != 'true' }}
-        uses: actions/setup-go@v6
-        with:
-          go-version: 1.26.5
-
-      - name: Build pkgproxy from source
-        if: ${{ fromJSON(inputs.enable-pkgproxy) }}
-        shell: bash
-        run: |
-          mkdir -p .cache/pkgproxy-bin
-          if [ ! -x .cache/pkgproxy-bin/pkgproxy ]; then
-            GOBIN="$PWD/.cache/pkgproxy-bin" go install gitlab.com/zygoon/pkgproxy/cmd/pkgproxy@v0.0.0-20260901193356-848d1c0f4249
-            ln -sf pkgproxy .cache/pkgproxy-bin/pkgproxyctl
-            ln -sf pkgproxy .cache/pkgproxy-bin/pkgproxy.pkgproxyctl
-          fi
-          echo "$PWD/.cache/pkgproxy-bin" >> "$GITHUB_PATH"
-
-      - name: Save pkgproxy binary cache
-        if: ${{ fromJSON(inputs.enable-pkgproxy) && steps.pkgproxy-binary-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v6
-        with:
-          path: .cache/pkgproxy-bin
-          key: pkgproxy-bin-v5-${{ runner.os }}-${{ inputs.job-arch }}
-
-      - name: Prepare pkgproxy package cache directories for restore
-        if: ${{ fromJSON(inputs.enable-pkgproxy) }}
-        shell: bash
-        run: |
-          sudo mkdir -p /run/pkgproxy /var/cache/pkgproxy
-          sudo chown "$USER:$USER" /run/pkgproxy
-          sudo chown -R "$USER:$USER" /var/cache/pkgproxy
-
-      - name: Restore pkgproxy package cache
-        if: ${{ fromJSON(inputs.enable-pkgproxy) }}
-        uses: actions/cache/restore@v6
-        with:
-          path: /var/cache/pkgproxy
-          key: pkgproxy-cache-v1-${{ runner.os }}-${{ inputs.job-arch }}-success-${{ github.run_id }}
-          restore-keys: |
-            pkgproxy-cache-v1-${{ runner.os }}-${{ inputs.job-arch }}-success-
-            pkgproxy-cache-v1-${{ runner.os }}-${{ inputs.job-arch }}-partial-
-
-      - name: Hand restored pkgproxy package cache back to pkgproxy
-        if: ${{ fromJSON(inputs.enable-pkgproxy) }}
-        shell: bash
-        run: |
-          sudo chown -R root:root /var/cache/pkgproxy
-
-      - name: Start pkgproxy daemon on host
-        if: ${{ fromJSON(inputs.enable-pkgproxy) }}
-        shell: bash
-        run: |
-          sudo systemd-run \
-            --unit=pkgproxy \
-            --property=Restart=no \
-            --property=WorkingDirectory="$PWD" \
-            "$PWD/.cache/pkgproxy-bin/pkgproxy" \
-              -addr :3142 \
-              -cache-dir /var/cache/pkgproxy \
-              -stats-socket-path /run/pkgproxy/stats.sock \
-              -admin-socket-path /run/pkgproxy/admin.sock
-          for _ in {1..100}; do
-            if [ -S /run/pkgproxy/stats.sock ] && [ -S /run/pkgproxy/admin.sock ]; then
-              exit 0
-            fi
-            sleep 0.1
-          done
-          sudo systemctl status pkgproxy.service --no-pager || true
-          sudo journalctl -u pkgproxy.service --no-pager -n 100 || true
-          exit 1
-
-      - name: Configure pkgproxy as apt cache proxy on host
-        if: ${{ fromJSON(inputs.enable-pkgproxy) }}
-        shell: bash
-        run: |
-          pkgproxyctl setup apt -addr :3142 | sudo sh
-
-      - name: Configure pkgproxy as snap cache proxy on host
-        if: ${{ fromJSON(inputs.enable-pkgproxy) }}
-        shell: bash
-        run: |
-          pkgproxyctl setup snap -addr :3142 | sudo sh
+          version: v0.0.0-20260901193356-848d1c0f4249
 
       - name: Install lxd snap
         shell: bash
@@ -181,7 +96,7 @@ jobs:
           # 'snapcraft' project's default profile. This must succeed: the hook is a hard
           # LXC forkstart dependency, so a silently-failed provision here surfaces minutes
           # later as the opaque "lxd forkstart ... exit status 1" during snapcraft pack.
-          pkgproxyctl setup snapcraft -addr :3142 | sudo sh
+          pkgproxyctl setup snapcraft -addr "${{ steps.pkgproxy.outputs.addr }}" | sudo sh
 
       - name: Verify pkgproxy provisioned the LXC pre-start hook
         if: ${{ fromJSON(inputs.enable-pkgproxy) }}
@@ -215,7 +130,7 @@ jobs:
           # config and pins pkgproxy's self-signed LXD proxy certificate. Run it
           # after lxc has initialized the snap LXD client config directory.
           lxc remote list >/dev/null
-          pkgproxyctl setup lxd-remote -addr :3142 | sh
+          pkgproxyctl setup lxd-remote -addr "${{ steps.pkgproxy.outputs.addr }}" | sh
 
       - name: Build snap
         shell: bash
@@ -347,16 +262,19 @@ jobs:
           sudo systemctl stop pkgproxy.service || true
           sudo chown -R "$USER:$USER" /var/cache/pkgproxy
 
+      # Save only when the stable success key wasn't an exact hit: GitHub caches
+      # are immutable, so re-saving an already-restored key would fail, and the
+      # whole point of the stable key is that a warm cache needs no rewrite.
       - name: Save pkgproxy package cache (on success)
-        if: ${{ fromJSON(inputs.enable-pkgproxy) && success() && steps.snap-output.outputs.snap-filename != '' }}
+        if: ${{ fromJSON(inputs.enable-pkgproxy) && success() && steps.snap-output.outputs.snap-filename != '' && steps.pkgproxy.outputs.package-cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
           path: /var/cache/pkgproxy
-          key: pkgproxy-cache-v1-${{ runner.os }}-${{ inputs.job-arch }}-success-${{ github.run_id }}
+          key: ${{ steps.pkgproxy.outputs.package-cache-key-success }}
 
       - name: Save pkgproxy package cache (on failure)
-        if: ${{ fromJSON(inputs.enable-pkgproxy) && failure() }}
+        if: ${{ fromJSON(inputs.enable-pkgproxy) && failure() && steps.pkgproxy.outputs.package-cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
           path: /var/cache/pkgproxy
-          key: pkgproxy-cache-v1-${{ runner.os }}-${{ inputs.job-arch }}-partial-${{ github.run_id }}
+          key: ${{ steps.pkgproxy.outputs.package-cache-key-partial }}
