@@ -18,7 +18,7 @@ inputs:
   go-version:
     description: Go toolchain version used to build pkgproxy when the binary cache misses.
     required: false
-    default: "1.26.5"
+    default: "1.27.1"
   addr:
     description: Address pkgproxy listens on for apt/snap/go and the LXD cert download.
     required: false
@@ -80,7 +80,7 @@ runs:
         # default isolation is by OS only, not arch), but runner.os and a per-run
         # id are deliberately omitted: the former is redundant, the latter would
         # make an immutable cache that's never reused in place.
-        echo "binary-key=${{ inputs.binary-cache-key }}-${{ inputs.version }}-${{ runner.arch }}" >> "$GITHUB_OUTPUT"
+        echo "binary-key=${{ inputs.binary-cache-key }}-${{ inputs.version }}-go${{ inputs.go-version }}-${{ runner.arch }}" >> "$GITHUB_OUTPUT"
         echo "package-cache-key-success=${{ inputs.package-cache-key }}-${{ runner.arch }}-success" >> "$GITHUB_OUTPUT"
         echo "package-cache-key-partial=${{ inputs.package-cache-key }}-${{ runner.arch }}-partial" >> "$GITHUB_OUTPUT"
 
