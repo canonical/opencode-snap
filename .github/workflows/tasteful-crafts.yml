@@ -45,6 +45,11 @@ on:
         description: "Snap store channel for Snapcraft snap (e.g., latest/stable, latest/edge)"
         required: false
         default: latest/stable
+      enable-pkgproxy:
+        type: boolean
+        description: "Whether to install and use pkgproxy as a caching proxy during builds"
+        required: false
+        default: true
       image-garden-channel:
         type: string
         description: "Snap store channel for image-garden snap (e.g., latest/stable, latest/edge)"
@@ -184,12 +189,9 @@ jobs:
     uses: ./.github/workflows/snapcraft-pack.yml
     with:
       job-arch: amd64
-      cache-host-snaps: ${{ inputs.cache-host-snaps }}
-      snapd-channel: ${{ inputs.snapd-channel }}
-      core22-channel: ${{ inputs.core22-channel }}
-      core24-channel: ${{ inputs.core24-channel }}
       lxd-channel: ${{ inputs.lxd-channel }}
       snapcraft-channel: ${{ inputs.snapcraft-channel }}
+      enable-pkgproxy: ${{ inputs.enable-pkgproxy }}
       runs-on: ${{ inputs.pack-runs-on-amd64 }}
 
   snapcraft-pack-arm64:
@@ -197,12 +199,9 @@ jobs:
     uses: ./.github/workflows/snapcraft-pack.yml
     with:
       job-arch: arm64
-      cache-host-snaps: ${{ inputs.cache-host-snaps }}
-      snapd-channel: ${{ inputs.snapd-channel }}
-      core22-channel: ${{ inputs.core22-channel }}
-      core24-channel: ${{ inputs.core24-channel }}
       lxd-channel: ${{ inputs.lxd-channel }}
       snapcraft-channel: ${{ inputs.snapcraft-channel }}
+      enable-pkgproxy: ${{ inputs.enable-pkgproxy }}
       runs-on: ${{ inputs.pack-runs-on-arm64 }}
 
   spread-amd64:
