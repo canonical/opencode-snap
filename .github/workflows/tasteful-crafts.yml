@@ -245,9 +245,7 @@ jobs:
     uses: ./.github/workflows/snapcraft-upload.yml
     with:
       artifact-pattern: snap-*
-      cache-host-snaps: ${{ inputs.cache-host-snaps }}
-      snapd-channel: ${{ inputs.snapd-channel }}
-      core24-channel: ${{ inputs.core24-channel }}
+      enable-pkgproxy: ${{ inputs.enable-pkgproxy }}
       snapcraft-channel: ${{ inputs.snapcraft-channel }}
       snapstore-channel: ${{ inputs.github-environment || (github.ref_type == 'tag' && 'latest/candidate' || 'latest/edge') }}
       github-environment: ${{ inputs.github-environment || (github.ref_type == 'tag' && 'latest/candidate' || 'latest/edge') }}
