@@ -5,11 +5,6 @@ name: tasteful crafts
 on:
   workflow_call:
     inputs:
-      cache-host-snaps:
-        type: boolean
-        description: "Whether to cache host snaps (snapd, core22, core24) during installation"
-        required: false
-        default: true
       cache-pristine-images:
         type: boolean
         description: Use GitHub cache to store pristine images (recommended)
@@ -23,11 +18,6 @@ on:
       snapd-channel:
         type: string
         description: "Snap store channel for snapd snap (e.g., latest/stable, latest/edge)"
-        required: false
-        default: latest/stable
-      core22-channel:
-        type: string
-        description: "Snap store channel for core22 snap (e.g., latest/stable, latest/edge)"
         required: false
         default: latest/stable
       core24-channel:
@@ -45,6 +35,11 @@ on:
         description: "Snap store channel for Snapcraft snap (e.g., latest/stable, latest/edge)"
         required: false
         default: latest/stable
+      enable-pkgproxy:
+        type: boolean
+        description: "Whether to install and use pkgproxy as a caching proxy during builds"
+        required: false
+        default: true
       image-garden-channel:
         type: string
         description: "Snap store channel for image-garden snap (e.g., latest/stable, latest/edge)"
@@ -130,27 +125,41 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7.0.1
 
-      - name: Install snapd snap
-        uses: ./.github/actions/install-cached-snap
-        with:
-          snap-name: snapd
-          channel: ${{ inputs.snapd-channel }}
-          enable-cache: ${{ inputs.cache-host-snaps }}
+      - name: Set up pkgproxy caching proxy
+        if: ${{ fromJSON(inputs.enable-pkgproxy) }}
+        id: pkgproxy
+        uses: zyga/setup-pkgproxy@v1
 
-      - name: Install core24 snap
-        uses: ./.github/actions/install-cached-snap
-        with:
-          snap-name: core24
-          channel: ${{ inputs.core24-channel }}
-          enable-cache: ${{ inputs.cache-host-snaps }}
+      - name: Install snapd, core24, and image-garden snaps
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo snap install snapd --channel "${{ inputs.snapd-channel }}"
+          sudo snap install core24 --channel "${{ inputs.core24-channel }}"
+          TARGET="image-garden"
+          COMPONENTS='${{ inputs.image-garden-components }}'
+          if [ -n "$COMPONENTS" ]; then
+            IFS=',' read -r -a COMPS <<<"$COMPONENTS"
+            for c in "${COMPS[@]}"; do
+              c="${c//[[:space:]]/}"
+              [ -n "$c" ] && TARGET+="+$c"
+            done
+          fi
+          sudo snap install "$TARGET" --channel "${{ inputs.image-garden-channel }}"
 
-      - name: Install image-garden snap
-        uses: ./.github/actions/install-cached-snap
+      - name: Prepare pkgproxy package cache for GitHub cache save
+        if: ${{ fromJSON(inputs.enable-pkgproxy) && always() }}
+        shell: bash
+        run: |
+          sudo systemctl stop pkgproxy.service || true
+          sudo chown -R "$USER:$USER" /var/cache/pkgproxy
+
+      - name: Save pkgproxy package cache
+        if: ${{ fromJSON(inputs.enable-pkgproxy) && steps.pkgproxy.outputs.package-cache-hit != 'true' }}
+        uses: actions/cache/save@v6
         with:
-          snap-name: image-garden
-          channel: ${{ inputs.image-garden-channel }}
-          components: ${{ inputs.image-garden-components }}
-          enable-cache: ${{ inputs.cache-host-snaps }}
+          path: /var/cache/pkgproxy
+          key: ${{ steps.pkgproxy.outputs.package-cache-key-success }}
 
       - name: Use spread from image-garden snap
         run: sudo snap alias image-garden.spread spread
@@ -184,12 +193,9 @@ jobs:
     uses: ./.github/workflows/snapcraft-pack.yml
     with:
       job-arch: amd64
-      cache-host-snaps: ${{ inputs.cache-host-snaps }}
-      snapd-channel: ${{ inputs.snapd-channel }}
-      core22-channel: ${{ inputs.core22-channel }}
-      core24-channel: ${{ inputs.core24-channel }}
       lxd-channel: ${{ inputs.lxd-channel }}
       snapcraft-channel: ${{ inputs.snapcraft-channel }}
+      enable-pkgproxy: ${{ inputs.enable-pkgproxy }}
       runs-on: ${{ inputs.pack-runs-on-amd64 }}
 
   snapcraft-pack-arm64:
@@ -197,12 +203,9 @@ jobs:
     uses: ./.github/workflows/snapcraft-pack.yml
     with:
       job-arch: arm64
-      cache-host-snaps: ${{ inputs.cache-host-snaps }}
-      snapd-channel: ${{ inputs.snapd-channel }}
-      core22-channel: ${{ inputs.core22-channel }}
-      core24-channel: ${{ inputs.core24-channel }}
       lxd-channel: ${{ inputs.lxd-channel }}
       snapcraft-channel: ${{ inputs.snapcraft-channel }}
+      enable-pkgproxy: ${{ inputs.enable-pkgproxy }}
       runs-on: ${{ inputs.pack-runs-on-arm64 }}
 
   spread-amd64:
@@ -215,7 +218,7 @@ jobs:
     uses: ./.github/workflows/spread.yml
     with:
       job-arch: amd64
-      cache-host-snaps: ${{ inputs.cache-host-snaps }}
+      enable-pkgproxy: ${{ inputs.enable-pkgproxy }}
       cache-pristine-images: ${{ inputs.cache-pristine-images }}
       cache-prepared-images: ${{ inputs.cache-prepared-images }}
       snapd-channel: ${{ inputs.snapd-channel }}
@@ -232,22 +235,21 @@ jobs:
       snap-filename: ${{ needs.snapcraft-pack-amd64.outputs.snap-filename }}
 
   # Create GitHub environments that match the deployment target names used
-  # here (latest/edge for branch builds, latest/candidate for tag builds by
-  # default), then add an environment secret named
+  # here (latest/edge for main branch builds, latest/candidate for tag builds
+  # by default), then add an environment secret named
   # SNAPCRAFT_STORE_CREDENTIALS. Export the secret value locally with:
   # snapcraft export-login --snaps=<snap-name> --channels=<publish-channel> \
   #   --acls=package_upload,package_release <token-name>
   snapcraft-upload:
     name: snapcraft upload
-    # Only publish on pushes/tags, never on pull requests.
-    if: ${{ !failure() && github.event_name != 'pull_request' }}
+    # Only publish tags and main branch pushes/dispatches. Never publish from
+    # pull requests or ad-hoc test branches.
+    if: ${{ !failure() && github.event_name != 'pull_request' && (github.ref_type == 'tag' || github.ref == 'refs/heads/main') }}
     needs: [snapcraft-pack-amd64, snapcraft-pack-arm64, spread-amd64]
     uses: ./.github/workflows/snapcraft-upload.yml
     with:
       artifact-pattern: snap-*
-      cache-host-snaps: ${{ inputs.cache-host-snaps }}
-      snapd-channel: ${{ inputs.snapd-channel }}
-      core24-channel: ${{ inputs.core24-channel }}
+      enable-pkgproxy: ${{ inputs.enable-pkgproxy }}
       snapcraft-channel: ${{ inputs.snapcraft-channel }}
       snapstore-channel: ${{ inputs.github-environment || (github.ref_type == 'tag' && 'latest/candidate' || 'latest/edge') }}
       github-environment: ${{ inputs.github-environment || (github.ref_type == 'tag' && 'latest/candidate' || 'latest/edge') }}
