@@ -14,11 +14,6 @@ on:
         description: "Whether to route snap store downloads through a pkgproxy caching proxy during installation"
         required: false
         default: true
-      pkgproxy-version:
-        type: string
-        description: "pkgproxy version to build for the caching proxy (a git tag or Go pseudo-version)"
-        required: false
-        default: v0.6.0
       cache-pristine-images:
         type: boolean
         description: Use GitHub cache to store pristine images (recommended)
@@ -132,9 +127,7 @@ jobs:
       - name: Set up pkgproxy caching proxy
         if: ${{ fromJSON(inputs.enable-pkgproxy) }}
         id: pkgproxy
-        uses: ./.github/actions/setup-pkgproxy
-        with:
-          version: ${{ inputs.pkgproxy-version }}
+        uses: zyga/setup-pkgproxy@v1
 
       - name: Install snapd and core24 snaps
         shell: bash

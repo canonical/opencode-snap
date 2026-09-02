@@ -20,11 +20,6 @@ on:
         description: "Whether to route snap store downloads through a pkgproxy caching proxy during installation"
         required: false
         default: true
-      pkgproxy-version:
-        type: string
-        description: "pkgproxy version to build for the caching proxy (a git tag or Go pseudo-version)"
-        required: false
-        default: v0.6.0
       snapcraft-channel:
         type: string
         description: "Snap store channel for Snapcraft snap (e.g., latest/stable,
@@ -63,9 +58,7 @@ jobs:
       - name: Set up pkgproxy caching proxy
         if: ${{ fromJSON(inputs.enable-pkgproxy) }}
         id: pkgproxy
-        uses: ./.github/actions/setup-pkgproxy
-        with:
-          version: ${{ inputs.pkgproxy-version }}
+        uses: zyga/setup-pkgproxy@v1
 
       - name: Install snapcraft snap
         shell: bash

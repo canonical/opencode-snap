@@ -29,9 +29,7 @@ jobs:
 
       - name: Set up pkgproxy caching proxy
         id: pkgproxy
-        uses: ./.github/actions/setup-pkgproxy
-        with:
-          version: v0.6.0
+        uses: zyga/setup-pkgproxy@v1
 
       - name: Install snapcraft snap
         shell: bash
