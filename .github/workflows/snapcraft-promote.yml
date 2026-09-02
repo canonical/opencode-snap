@@ -27,27 +27,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7.0.1
 
-      - name: Install snapd snap
-        uses: ./.github/actions/install-cached-snap
-        with:
-          snap-name: snapd
-          channel: latest/stable
-          enable-cache: true
-
-      - name: Install core24 snap
-        uses: ./.github/actions/install-cached-snap
-        with:
-          snap-name: core24
-          channel: latest/stable
-          enable-cache: true
+      - name: Set up pkgproxy caching proxy
+        id: pkgproxy
+        uses: zyga/setup-pkgproxy@v1
 
       - name: Install snapcraft snap
-        uses: ./.github/actions/install-cached-snap
-        with:
-          snap-name: snapcraft
-          channel: latest/stable
-          classic: "true"
-          enable-cache: true
+        shell: bash
+        run: |
+          sudo snap install snapcraft --channel latest/stable --classic
 
       - name: Resolve snap name from snapcraft.yaml
         id: snap-name
@@ -79,3 +66,19 @@ jobs:
             --to-channel="${{ inputs.target-channel }}" \
             --yes \
             "$SNAP_NAME"
+
+      - name: Prepare pkgproxy package cache for GitHub cache save
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          sudo systemctl stop pkgproxy.service || true
+          sudo chown -R "$USER:$USER" /var/cache/pkgproxy
+
+      # Save only when the stable success key wasn't an exact hit (GitHub caches
+      # are immutable; a warm cache needs no rewrite).
+      - name: Save pkgproxy package cache
+        if: ${{ steps.pkgproxy.outputs.package-cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: /var/cache/pkgproxy
+          key: ${{ steps.pkgproxy.outputs.package-cache-key-success }}

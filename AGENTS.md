@@ -32,6 +32,24 @@ The `build.yml` entrypoint runs when `snap/snapcraft.yaml`, `spread.yaml`,
 `tests/**`, or `.image-garden.mk` change. It triggers on push to `main`,
 `master`, `develop`, and on `v*` tags, as well as on pull requests.
 
+### External actions
+
+| Action                                                              | Purpose                                                                                                                          |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| [`zyga/setup-pkgproxy@v1`](https://github.com/zyga/setup-pkgproxy) | Build and run [pkgproxy](https://gitlab.com/zygoon/pkgproxy) as a caching proxy for apt/snap/go/LXD traffic, with a persistent payload cache; used by `snapcraft-pack.yml`, `snapcraft-upload.yml`, `snapcraft-promote.yml`, `spread.yml`, and `tasteful-crafts.yml` |
+
+`setup-pkgproxy` builds a pinned pkgproxy version (its own `version` input
+default — callers here no longer pass `version:` explicitly, so bumping the
+pin is a one-file change in that repo, not an edit in every caller),
+installs the binary to `/usr/local/bin`, installs a `pkgproxy.service`
+systemd unit whose `RuntimeDirectory=`/`CacheDirectory=` create
+`/run/pkgproxy` and `/var/cache/pkgproxy`, starts the daemon, and points the
+host's apt/snapd at the proxy. It exposes `package-cache-hit` and
+`package-cache-key-success` / `package-cache-key-partial` outputs so the caller
+saves the payload cache under the same stable per-arch key the restore used,
+only on a cache miss. Snapcraft-specific LXD wiring (the build container
+profile, pre-start hook, and image remote) stays in `snapcraft-pack.yml`.
+
 ### Renovate
 
 Renovate is configured via `renovate.json` to bump dependencies (bun) and opencode
