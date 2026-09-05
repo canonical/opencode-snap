@@ -1,6 +1,10 @@
 #!/bin/sh
 BIN="$SNAP/../components/$SNAP_REVISION/desktop/opencode_desktop"
 
+# Prepend the snap's bundled clipboard tools (wl-copy / wl-paste) to PATH.
+PATH="$SNAP/usr/bin:$PATH"
+export PATH
+
 if [ ! -f "$BIN" ]; then
     ICON="${SNAP}/meta/gui/icon.png"
     if command -v zenity >/dev/null 2>&1; then

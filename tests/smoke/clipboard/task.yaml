@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: Canonical Ltd.
+# SPDX-License-Identifier: Apache-2.0
+
+summary: Verify the opencode CLI wrapper exposes the bundled clipboard tools on PATH
+details: |
+    opencode copies text to the clipboard in CLI mode by resolving a clipboard
+    tool (wl-copy/wl-paste on Wayland, else xclip/xsel) via the PATH
+    environment. The snap bundles wl-copy and wl-paste under $SNAP/usr/bin, so
+    the wrapper must prepend that directory to PATH; otherwise the lookup finds
+    nothing and copy-to-clipboard silently falls back to a temp file.
+
+    This test verifies:
+
+      1. wl-copy and wl-paste are bundled and executable in the snap.
+      2. Inside the snap runtime (as launched by the wrapper), both tools are
+         resolvable via PATH.
+
+execute: |
+    SNAP="/snap/opencode/current"
+
+    # 1. The snap must bundle both clipboard tools.
+    for tool in wl-copy wl-paste; do
+        if [ ! -x "$SNAP/usr/bin/$tool" ]; then
+            echo "ERROR: $tool is not bundled in the snap ($SNAP/usr/bin/$tool)" >&2
+            exit 1
+        fi
+    done
+
+    # 2. Inside the snap runtime (snap run applies the wrapper's PATH setup),
+    #    both tools must resolve to the snap's own copies.
+    for tool in wl-copy wl-paste; do
+        RESOLVED=$(snap run --shell opencode which "$tool")
+        if [ -z "$RESOLVED" ]; then
+            echo "ERROR: $tool is not resolvable via the snap wrapper PATH" >&2
+            exit 1
+        fi
+        if [ "$RESOLVED" != "$SNAP/usr/bin/$tool" ]; then
+            echo "ERROR: $tool resolved to '$RESOLVED' instead of $SNAP/usr/bin/$tool" >&2
+            exit 1
+        fi
+        echo "$tool -> $RESOLVED"
+    done
