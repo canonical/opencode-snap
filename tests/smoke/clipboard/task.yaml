@@ -12,9 +12,8 @@ details: |
     This test verifies:
 
       1. wl-copy and wl-paste are bundled and executable in the snap.
-      2. The installed wrapper prepends $SNAP/usr/bin to PATH and exports it.
-      3. After the wrapper's PATH setup, both tools resolve to the snap's own
-         usr/bin and are not shadowed by a host binary of the same name.
+      2. Inside the snap runtime (as launched by the wrapper), both tools are
+         resolvable via PATH.
 
 execute: |
     SNAP="/snap/opencode/current"
@@ -27,30 +26,17 @@ execute: |
         fi
     done
 
-    # 2. The wrapper must prepend the snap's clipboard tools to PATH and export
-    #    them so the opencode binary inherits the updated PATH.
-    WRAPPER="$SNAP/bin/opencode.wrapper"
-    if ! grep -q '^PATH="\$SNAP/usr/bin:\$PATH"' "$WRAPPER"; then
-        echo "ERROR: wrapper does not prepend \$SNAP/usr/bin to PATH: $WRAPPER" >&2
-        exit 1
-    fi
-    if ! grep -q '^export PATH$' "$WRAPPER"; then
-        echo "ERROR: wrapper does not export PATH: $WRAPPER" >&2
-        exit 1
-    fi
-
-    # 3. Apply the same PATH setup the wrapper performs and verify the bundled
-    #    tools are discoverable and resolve to the snap's copies.
-    PATH="$SNAP/usr/bin:$PATH"
-    export PATH
+    # 2. Inside the snap runtime (snap run applies the wrapper's PATH setup),
+    #    both tools must resolve to the snap's own copies.
     for tool in wl-copy wl-paste; do
-        RESOLVED=$(command -v "$tool" || true)
+        RESOLVED=$(snap run --shell opencode which "$tool")
         if [ -z "$RESOLVED" ]; then
-            echo "ERROR: $tool is not resolvable via the wrapper PATH" >&2
+            echo "ERROR: $tool is not resolvable via the snap wrapper PATH" >&2
             exit 1
         fi
         if [ "$RESOLVED" != "$SNAP/usr/bin/$tool" ]; then
             echo "ERROR: $tool resolved to '$RESOLVED' instead of $SNAP/usr/bin/$tool" >&2
             exit 1
         fi
+        echo "$tool -> $RESOLVED"
     done
