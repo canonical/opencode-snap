@@ -1,0 +1,56 @@
+# SPDX-FileCopyrightText: Canonical Ltd.
+# SPDX-License-Identifier: Apache-2.0
+
+summary: Verify the opencode CLI wrapper exposes the bundled clipboard tools on PATH
+details: |
+    opencode copies text to the clipboard in CLI mode by resolving a clipboard
+    tool (wl-copy/wl-paste on Wayland, else xclip/xsel) via the PATH
+    environment. The snap bundles wl-copy and wl-paste under $SNAP/usr/bin, so
+    the wrapper must prepend that directory to PATH; otherwise the lookup finds
+    nothing and copy-to-clipboard silently falls back to a temp file.
+
+    This test verifies:
+
+      1. wl-copy and wl-paste are bundled and executable in the snap.
+      2. The installed wrapper prepends $SNAP/usr/bin to PATH and exports it.
+      3. After the wrapper's PATH setup, both tools resolve to the snap's own
+         usr/bin and are not shadowed by a host binary of the same name.
+
+execute: |
+    SNAP="/snap/opencode/current"
+
+    # 1. The snap must bundle both clipboard tools.
+    for tool in wl-copy wl-paste; do
+        if [ ! -x "$SNAP/usr/bin/$tool" ]; then
+            echo "ERROR: $tool is not bundled in the snap ($SNAP/usr/bin/$tool)" >&2
+            exit 1
+        fi
+    done
+
+    # 2. The wrapper must prepend the snap's clipboard tools to PATH and export
+    #    them so the opencode binary inherits the updated PATH.
+    WRAPPER="$SNAP/bin/opencode.wrapper"
+    if ! grep -q '^PATH="\$SNAP/usr/bin:\$PATH"' "$WRAPPER"; then
+        echo "ERROR: wrapper does not prepend \$SNAP/usr/bin to PATH: $WRAPPER" >&2
+        exit 1
+    fi
+    if ! grep -q '^export PATH$' "$WRAPPER"; then
+        echo "ERROR: wrapper does not export PATH: $WRAPPER" >&2
+        exit 1
+    fi
+
+    # 3. Apply the same PATH setup the wrapper performs and verify the bundled
+    #    tools are discoverable and resolve to the snap's copies.
+    PATH="$SNAP/usr/bin:$PATH"
+    export PATH
+    for tool in wl-copy wl-paste; do
+        RESOLVED=$(command -v "$tool" || true)
+        if [ -z "$RESOLVED" ]; then
+            echo "ERROR: $tool is not resolvable via the wrapper PATH" >&2
+            exit 1
+        fi
+        if [ "$RESOLVED" != "$SNAP/usr/bin/$tool" ]; then
+            echo "ERROR: $tool resolved to '$RESOLVED' instead of $SNAP/usr/bin/$tool" >&2
+            exit 1
+        fi
+    done
