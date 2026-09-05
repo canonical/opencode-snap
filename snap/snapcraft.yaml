@@ -47,8 +47,8 @@ parts:
   bun:
     plugin: dump
     source:
-      - on amd64 to amd64: https://github.com/oven-sh/bun/releases/download/bun-v1.4.0/bun-linux-x64.zip
-      - on arm64 to arm64: https://github.com/oven-sh/bun/releases/download/bun-v1.4.0/bun-linux-aarch64.zip
+      - on amd64 to amd64: https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-x64.zip
+      - on arm64 to arm64: https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-aarch64.zip
     override-build: |
       install -Dm755 "${CRAFT_PART_SRC}"/bun-linux-*/bun /usr/local/bin/bun
       ln -sf /usr/local/bin/bun /usr/local/bin/bunx
