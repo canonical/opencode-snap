@@ -6,20 +6,30 @@ details: |
     opencode copies text to the clipboard in CLI mode by resolving a clipboard
     tool (wl-copy/wl-paste on Wayland, else xclip/xsel) via the PATH
     environment. The snap bundles wl-copy and wl-paste under $SNAP/usr/bin, so
-    the wrapper must prepend that directory to PATH; otherwise the lookup finds
-    nothing and copy-to-clipboard silently falls back to a temp file.
+    the wrapper must prepend that directory to PATH before launching the app;
+    otherwise the lookup finds nothing and copy-to-clipboard silently falls
+    back to a temp file.
 
     This test verifies:
 
       1. wl-copy and wl-paste are bundled and executable in the snap.
-      2. The installed wrapper prepends $SNAP/usr/bin to PATH and exports it.
-      3. After the wrapper's PATH setup, both tools resolve to the snap's own
-         usr/bin and are not shadowed by a host binary of the same name.
+      2. The opencode and desktop wrappers prepend $SNAP/usr/bin to PATH (and
+         export PATH) *before* unsetting the SNAP_* variables, so the tools
+         are inherited on PATH by the launched app.
+      3. With that PATH in place, both tools resolve to the snap's own copies
+         and are not shadowed by host binaries of the same name.
+
+    Note that `snap run --shell` is deliberately not used here: it starts a
+    plain shell without running the app wrapper, so the wrapper's PATH setup
+    would not be applied. Resolution is done with the shell builtin
+    `command -v` rather than the external `which`, because `which` tries to
+    *execute* the matched binary, which the snap runtime rejects for the
+    bundled ELF tools.
 
 execute: |
     SNAP="/snap/opencode/current"
 
-    # 1. The snap must bundle both clipboard tools.
+    # 1. The snap must bundle both clipboard tools and ship them executable.
     for tool in wl-copy wl-paste; do
         if [ ! -x "$SNAP/usr/bin/$tool" ]; then
             echo "ERROR: $tool is not bundled in the snap ($SNAP/usr/bin/$tool)" >&2
@@ -27,30 +37,37 @@ execute: |
         fi
     done
 
-    # 2. The wrapper must prepend the snap's clipboard tools to PATH and export
-    #    them so the opencode binary inherits the updated PATH.
-    WRAPPER="$SNAP/bin/opencode.wrapper"
-    if ! grep -q '^PATH="\$SNAP/usr/bin:\$PATH"' "$WRAPPER"; then
-        echo "ERROR: wrapper does not prepend \$SNAP/usr/bin to PATH: $WRAPPER" >&2
-        exit 1
-    fi
-    if ! grep -q '^export PATH$' "$WRAPPER"; then
-        echo "ERROR: wrapper does not export PATH: $WRAPPER" >&2
-        exit 1
-    fi
+    # 2. Both wrappers must prepend the bundled tools directory to PATH (and
+    #    export PATH) before they unset the SNAP_* variables. If the PATH line
+    #    were moved after the unset loop, $SNAP would be gone and the directory
+    #    would silently collapse to a host path.
+    for wrapper in opencode.wrapper opencode-desktop.wrapper; do
+        W="$SNAP/bin/$wrapper"
+        if ! grep -qF 'PATH="$SNAP/usr/bin:$PATH"' "$W"; then
+            echo "ERROR: $wrapper does not prepend \$SNAP/usr/bin to PATH" >&2
+            exit 1
+        fi
+        if ! grep -qF 'export PATH' "$W"; then
+            echo "ERROR: $wrapper does not export PATH" >&2
+            exit 1
+        fi
+        PATH_LINE=$(grep -nF 'PATH="$SNAP/usr/bin:$PATH"' "$W" | head -1 | cut -d: -f1)
+        UNSET_LINE=$(grep -nF 'for var in $(env | cut -d= -f1 | grep' "$W" | head -1 | cut -d: -f1)
+        if [ -z "$PATH_LINE" ] || [ -z "$UNSET_LINE" ] || [ "$PATH_LINE" -ge "$UNSET_LINE" ]; then
+            echo "ERROR: $wrapper must set PATH before unsetting the SNAP_* variables" >&2
+            exit 1
+        fi
+    done
 
-    # 3. Apply the same PATH setup the wrapper performs and verify the bundled
-    #    tools are discoverable and resolve to the snap's copies.
+    # 3. Behavioural check: with the PATH the wrappers export, both tools must
+    #    resolve to the snap's own copies.
     PATH="$SNAP/usr/bin:$PATH"
     export PATH
     for tool in wl-copy wl-paste; do
-        RESOLVED=$(command -v "$tool" || true)
-        if [ -z "$RESOLVED" ]; then
-            echo "ERROR: $tool is not resolvable via the wrapper PATH" >&2
-            exit 1
-        fi
+        RESOLVED=$(command -v "$tool")
         if [ "$RESOLVED" != "$SNAP/usr/bin/$tool" ]; then
             echo "ERROR: $tool resolved to '$RESOLVED' instead of $SNAP/usr/bin/$tool" >&2
             exit 1
         fi
+        echo "$tool -> $RESOLVED"
     done
