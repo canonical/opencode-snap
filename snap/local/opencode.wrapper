@@ -1,8 +1,11 @@
 #!/bin/sh
 # Wrapper script for opencode to unset SNAP environment variables
 
-# Save the path to the actual binary
+# Save the path to the actual binary and prepend the snap's bundled
+# clipboard tools (wl-copy / wl-paste) to PATH so CLI copy-to-clipboard works.
 BIN="$SNAP/bin/opencode"
+PATH="$SNAP/usr/bin:$PATH"
+export PATH
 
 # Unset all environment variables starting with SNAP
 for var in $(env | cut -d= -f1 | grep '^SNAP'); do
