@@ -1,0 +1,112 @@
+# SPDX-FileCopyrightText: Canonical Ltd.
+# SPDX-License-Identifier: Apache-2.0
+
+summary: Replay a recorded opencode/LLM exchange offline with mannequin
+details: |
+    This test replays a pre-recorded OpenAI-compatible API session with
+    `mannequin replay` and verifies that the opencode snap produces the
+    recorded answer without touching the real backend.
+
+    The session under ./recordings/joke was captured once against
+    https://ai.zygoon.pl with `mannequin record` while running
+    `opencode run -m zygoon/qwen3.8:27b "Tell me a joke about AI"`
+    in an empty directory. It contains two exchanges, in order:
+
+      1. POST /chat/completions  (opencode's session-title generation)
+      2. POST /chat/completions  (the actual joke answer)
+
+    Mannequin replays responses FIFO per method+path and does not match on
+    request bodies, so replaying requires the same request sequence that was
+    recorded — which is exactly what running the same opencode command in a
+    fresh empty directory produces. Any timestamp embedded in the request
+    body differs between runs; mannequin logs a warning and still serves the
+    recorded response.
+
+    The mannequin snap is strictly confined. Spread delivers the project at
+    /root/opencode-snap and tests run as root, so the recordings live under
+    root's home directory and become readable once the home interface is
+    connected.
+
+    The test:
+
+      1. Starts `mannequin replay` on 127.0.0.1:8090 serving ./recordings.
+      2. Creates an empty scratch directory with a project-local
+         opencode.json that redefines the `zygoon` provider with
+         baseURL http://127.0.0.1:8090 (the global opencode config and its
+         API key are reused; no credentials are stored in this repo).
+      3. Runs `opencode run -m zygoon/qwen3.8:27b "Tell me a joke about AI"`
+         there and asserts the output contains the recorded punchline with
+         MATCH.
+
+prepare: |
+    # mannequin is only needed by this task; install it here rather than in
+    # the global prepare so the other smoke tests don't pay for it. Its home
+    # interface is auto-connected by snapd, and the global prepare chowns the
+    # project tree to root, so the strictly-confined snap can read the
+    # recordings directly from $PWD (under /root, root's $HOME).
+    snap install mannequin
+
+execute: |
+    RECORDINGS_DIR="$PWD/recordings"
+    SESSION="joke"
+    PORT=8090
+
+    # The recorded punchline (see recordings/joke/exchange-002/response.json).
+    JOKE_PUNCHLINE="It had too many unresolved layers."
+
+    # 1. Serve the recorded session offline, as a transient systemd unit so
+    #    restore can stop it reliably regardless of how the task ends. Use
+    #    `snap run` rather than the /snap/bin symlink: on SELinux systems
+    #    (Fedora) systemd is denied from exec'ing the /snap/bin -> /usr/bin/snap
+    #    symlink directly (status=203/EXEC), while `snap run` goes through
+    #    snapd's own confined exec path.
+    systemd-run --unit=mannequin-replay-joke --description="mannequin replay (joke)" \
+        --collect \
+        snap run mannequin replay -session "$SESSION" -port "$PORT" \
+            -recordings-dir "$RECORDINGS_DIR"
+
+    # Wait for the replay port to accept connections (bounded, no fixed sleep).
+    READY=0
+    for _ in $(seq 1 50); do
+        if (echo >"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; then
+            READY=1
+            break
+        fi
+        sleep 0.2
+    done
+    if [ "$READY" != 1 ]; then
+        echo "ERROR: mannequin replay did not start listening on port $PORT" >&2
+        journalctl -u mannequin-replay-joke --no-pager >&2 || true
+        echo "--- kernel log (possible confinement denials) ---" >&2
+        journalctl -k --since "-1min" --no-pager >&2 || true
+        exit 1
+    fi
+
+    # 2. Empty scratch directory with a proxy-pointed provider override.
+    WORK="$(mktemp -d)"
+    cat >"$WORK/opencode.json" <<'EOF'
+    {
+      "$schema": "https://opencode.ai/config.json",
+      "provider": {
+        "zygoon": {
+          "name": "ai.zygoon.pl",
+          "npm": "@ai-sdk/openai-compatible",
+          "options": { "baseURL": "http://127.0.0.1:8090" },
+          "models": { "qwen3.8:27b": { "name": "qwen3.8:27b" } }
+        }
+      }
+    }
+    EOF
+    cd "$WORK"
+
+    # 3. Run opencode against the replay server and assert on the output.
+    #    MATCH echoes its input when the pattern is not found; the replay
+    #    server logs are printed by the restore step below.
+    opencode run -m zygoon/qwen3.8:27b "Tell me a joke about AI" 2>&1 \
+        | MATCH "$JOKE_PUNCHLINE"
+
+restore: |
+    # Show replay server logs for post-mortem debugging, then stop the unit.
+    journalctl -u mannequin-replay-joke --no-pager 2>&1 || true
+    systemctl stop mannequin-replay-joke 2>/dev/null || true
+    systemctl reset-failed mannequin-replay-joke 2>/dev/null || true
