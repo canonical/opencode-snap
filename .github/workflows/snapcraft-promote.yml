@@ -19,7 +19,7 @@ on:
 jobs:
   promote:
     name: promote from ${{ inputs.source-channel }} to ${{ inputs.target-channel }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     environment:
       name: ${{ inputs.target-channel }}
       deployment: true
