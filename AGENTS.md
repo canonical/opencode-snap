@@ -101,11 +101,35 @@ Both apps use wrapper scripts located in `snap/local/`:
 
 ### Testing
 
-Spread tests live in `tests/smoke/opencode/task.yaml`. Configured in
-`spread.yaml` to run across Ubuntu 24.04, Ubuntu 26.04, Debian 13, and Fedora
-43 using the `garden` backend (image-garden). The smoke test verifies the snap
-is installed, launches without crashing, prints help output, and reports the
-correct version (`1.15.5`). Desktop binaries are available as:
+Spread tests live under `tests/smoke/`:
+
+- `tests/smoke/opencode/task.yaml` — verifies the snap is installed, launches
+  without crashing, prints help output, and reports the correct version
+  (`1.18.31`).
+- `tests/smoke/clipboard/task.yaml` — verifies the bundled wl-copy/wl-paste
+  are on PATH via the wrappers.
+- `tests/smoke/desktop-wrapper/task.yaml` — verifies the desktop component
+  binary path used by the wrapper exists and is executable.
+- `tests/smoke/joke/task.yaml` — replays a recorded OpenAI-compatible API
+  session with the [mannequin](https://snapcraft.io/mannequin) snap
+  (`mannequin replay -session joke`) and asserts that
+  `opencode run -m zygoon/qwen3.8:27b "Tell me a joke about AI"` prints the
+  recorded punchline, entirely offline. The session lives in
+  `tests/smoke/joke/recordings/joke/` and was captured once against
+  `https://ai.zygoon.pl` with `mannequin record`. The task installs the
+  mannequin snap in its own `prepare:` (the `home` interface auto-connects,
+  and since spread connects as root — see `spread.yaml` — the strictly-
+  confined snap can read the project tree under `/root`, root's `$HOME`).
+  Replay runs as a transient systemd unit via `systemd-run`, with logs
+  dumped from the journal in `restore:`. The `zygoon` provider is pointed
+  at `http://127.0.0.1:8090` via a project-local `opencode.json` in a
+  scratch directory. No credentials are stored in the repo — the API key
+  comes from the host's opencode `auth.json` at record time and is not
+  persisted in the recording.
+
+Configured in `spread.yaml` to run across Ubuntu 24.04, Ubuntu 26.04, Debian
+13, and Fedora 43 using the `garden` backend (image-garden). Desktop binaries
+are available as:
 - `opencode-desktop-linux-amd64.deb` for amd64
 - `opencode-desktop-linux-arm64.deb` for arm64
 
@@ -118,6 +142,8 @@ correct version (`1.15.5`). Desktop binaries are available as:
 | `snap/local/opencode-desktop.wrapper` | Desktop GUI wrapper script  |
 | `snap/local/opencode.opencode`        | Bash completion script      |
 | `tests/smoke/opencode/task.yaml`      | Smoke test                  |
+| `tests/smoke/joke/task.yaml`          | Offline LLM replay test (mannequin) |
+| `tests/smoke/joke/recordings/joke/`   | Recorded OpenAI-compatible session |
 | `spread.yaml`                         | Spread test configuration   |
 | `.image-garden.mk`                    | Image garden backend config |
 
