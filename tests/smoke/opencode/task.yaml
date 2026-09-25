@@ -11,7 +11,7 @@ execute: |
     snap list | MATCH "opencode"
 
     # Run opencode and check help output.
-    snap run opencode --help 2>&1 | MATCH "opencode completion"
+    snap run opencode --help 2>&1 | MATCH "OpenCode command line interface"
 
     # Verify opencode run (non-interactive mode) works — version format matches semver.
     snap run opencode --version 2>&1 | MATCH "[0-9]+\.[0-9]+\.[0-9]+"
