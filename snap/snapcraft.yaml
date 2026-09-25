@@ -13,12 +13,11 @@ contact: https://github.com/anomalyco/opencode/issues
 website: https://opencode.ai
 source-code: https://github.com/anomalyco/opencode
 issues: https://github.com/anomalyco/opencode/issues
-# Note on version reporting: this snap builds from a git source-branch, so the
+# Note on version reporting: this snap builds from an upstream git tag, so the
 # reported version comes from upstream's package.json at that commit. It will
 # often differ from what `npm install @opencode-ai/cli@next` reports (e.g.
 # "0.0.0-next-15495"), because npm pre-release versions are CI build counters,
-# not the actual product version. When upstream publishes a real v2 tag we will
-# switch to source-commit to pin an exact release.
+# not the actual product version.
 adopt-info: opencode-cli
 
 grade: stable
@@ -55,9 +54,9 @@ parts:
     plugin: nil
     source: https://github.com/anomalyco/opencode
     source-type: git
-    # TODO: Replace with actual commit hash from dev branch once v2 is stable enough.
-    # Until then, track the latest HEAD of the dev branch.
-    source-branch: dev
+    # Pin to the latest v2 tag (upstream publishes tags but no GitHub
+    # releases for v2).
+    source-tag: v2.0.16
     build-packages:
       - build-essential
     build-environment:
@@ -72,14 +71,14 @@ parts:
 
       # Set OPENCODE_VERSION so that the resulting binary will know its version.
       # For details see node_modules/@opencode-ai/script/package.json
-      OPENCODE_VERSION=$(bun -e "console.log(require('./packages/opencode/package.json').version)")
+      OPENCODE_VERSION=$(bun -e "console.log(require('./packages/cli/package.json').version)")
       export OPENCODE_VERSION
 
       # Set snap version to the same value.
       craftctl set version="$OPENCODE_VERSION"
 
       # Build opencode CLI from source
-      cd packages/opencode
+      cd packages/cli
 
       # Build baseline binary (for CPUs without AVX2)
       echo "Building baseline binary..."
@@ -88,10 +87,10 @@ parts:
       # Install the CLI binary
       case "$CRAFT_ARCH_BUILD_FOR" in
         amd64)
-          install -Dm755 dist/opencode-linux-x64-baseline/bin/opencode "${CRAFT_PART_INSTALL}"/bin/opencode
+          install -Dm755 dist/cli-linux-x64-baseline/bin/opencode "${CRAFT_PART_INSTALL}"/bin/opencode
           ;;
         arm64)
-          install -Dm755 dist/opencode-linux-arm64/bin/opencode "${CRAFT_PART_INSTALL}"/bin/opencode
+          install -Dm755 dist/cli-linux-arm64/bin/opencode "${CRAFT_PART_INSTALL}"/bin/opencode
           ;;
       esac
 
