@@ -10,7 +10,7 @@ on:
         required: true
         type: string
       target:
-        description: Branch to tag from
+        description: Branch to tag from (for example main or 2.x)
         required: false
         default: main
         type: string
@@ -101,20 +101,35 @@ jobs:
 
             const packagedTag = uniquePackagedTags[0];
 
-            const upstreamLatest = await github.rest.repos.getLatestRelease({
+            // Upstream does not create GitHub releases for every series (for
+            // example the 2.x series is tag-only), so compare against upstream
+            // git tags in the same major series instead of the latest release.
+            const upstreamTags = await github.paginate(github.rest.repos.listTags, {
               owner: "anomalyco",
               repo: "opencode",
+              per_page: 100,
             });
-            const upstreamLatestTag = upstreamLatest.data.tag_name;
 
             const releaseParsed = parseSemver(releaseTag);
             const packagedParsed = parseSemver(packagedTag);
-            const upstreamParsed = parseSemver(upstreamLatestTag);
 
-            if (!releaseParsed || !packagedParsed || !upstreamParsed) {
-              core.setFailed(`Could not parse one of the tags as semver: release=${releaseTag}, packaged=${packagedTag}, upstream=${upstreamLatestTag}.`);
+            if (!releaseParsed || !packagedParsed) {
+              core.setFailed(`Could not parse one of the tags as semver: release=${releaseTag}, packaged=${packagedTag}.`);
               return;
             }
+
+            const upstreamSeriesTags = upstreamTags
+              .map((t) => ({ name: t.name, parsed: parseSemver(t.name) }))
+              .filter((t) => t.parsed !== null && t.parsed.major === releaseParsed.major)
+              .sort((a, b) => compareSemver(a.parsed, b.parsed));
+
+            if (upstreamSeriesTags.length === 0) {
+              core.setFailed(`No upstream opencode tag found in the v${releaseParsed.major}.x series for release tag ${releaseTag}.`);
+              return;
+            }
+
+            const upstreamLatestTag = upstreamSeriesTags.at(-1).name;
+            const upstreamParsed = upstreamSeriesTags.at(-1).parsed;
 
             if (releaseTag !== packagedTag) {
               core.setFailed(`Release tag ${releaseTag} must exactly match packaged opencode source-tag ${packagedTag} from snap/snapcraft.yaml.`);
@@ -122,11 +137,11 @@ jobs:
             }
 
             if (compareSemver(releaseParsed, upstreamParsed) > 0) {
-              core.setFailed(`Release tag ${releaseTag} must not be newer than upstream opencode latest release ${upstreamLatestTag}.`);
+              core.setFailed(`Release tag ${releaseTag} must not be newer than upstream opencode latest tag ${upstreamLatestTag} in the v${releaseParsed.major}.x series.`);
               return;
             }
 
-            core.info(`Validated release tag ${releaseTag} against packaged tag ${packagedTag} and upstream latest ${upstreamLatestTag}.`);
+            core.info(`Validated release tag ${releaseTag} against packaged tag ${packagedTag} and upstream latest tag ${upstreamLatestTag}.`);
 
       - name: Create tag from target branch
         if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -230,6 +245,7 @@ jobs:
             const previous = currentParsed
               ? semverTags
                 .filter((t) => t.name !== currentTag)
+                .filter((t) => t.parsed.major === currentParsed.major)
                 .filter((t) => compareSemver(t.parsed, currentParsed) < 0)
                 .at(-1)
               : semverTags.filter((t) => t.name !== currentTag).at(-1);
