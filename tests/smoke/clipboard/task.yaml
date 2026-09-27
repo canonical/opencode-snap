@@ -13,8 +13,8 @@ details: |
     This test verifies:
 
       1. wl-copy and wl-paste are bundled and executable in the snap.
-      2. The opencode and desktop wrappers prepend $SNAP/usr/bin to PATH (and
-         export PATH) *before* unsetting the SNAP_* variables, so the tools
+      2. The opencode wrapper prepends $SNAP/usr/bin to PATH (and
+         exports PATH) *before* unsetting the SNAP_* variables, so the tools
          are inherited on PATH by the launched app.
       3. With that PATH in place, both tools resolve to the snap's own copies
          and are not shadowed by host binaries of the same name.
@@ -37,11 +37,11 @@ execute: |
         fi
     done
 
-    # 2. Both wrappers must prepend the bundled tools directory to PATH (and
-    #    export PATH) before they unset the SNAP_* variables. If the PATH line
+    # 2. The wrapper must prepend the bundled tools directory to PATH (and
+    #    export PATH) before it unsets the SNAP_* variables. If the PATH line
     #    were moved after the unset loop, $SNAP would be gone and the directory
     #    would silently collapse to a host path.
-    for wrapper in opencode.wrapper opencode-desktop.wrapper; do
+    for wrapper in opencode.wrapper; do
         W="$SNAP/bin/$wrapper"
         if ! grep -qF 'PATH="$SNAP/usr/bin:$PATH"' "$W"; then
             echo "ERROR: $wrapper does not prepend \$SNAP/usr/bin to PATH" >&2
