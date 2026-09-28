@@ -35,15 +35,18 @@ jobs:
   snap-build-test-publish:
     uses: ./.github/workflows/tasteful-crafts.yml
     # Branch builds publish to vars.SNAPCRAFT_CHANNEL when set, otherwise to
-    # latest/edge. Tag builds publish to latest/candidate. The 2.x branch and
-    # its tags route to the 2/ track instead. Create matching GitHub environments
+    # latest/edge. Tag builds publish to latest/candidate, except tags on the
+    # 2.x series (v2.*) and the 2.x branch itself, which route to the 2/ track
+    # (2/candidate and 2/edge respectively). Create matching GitHub environments
     # and add an environment secret named SNAPCRAFT_STORE_CREDENTIALS to each one.
     with:
       snapstore-channel: >-
-        ${{ startsWith(github.ref, 'refs/heads/2.x')
-          && (github.ref_type == 'tag' && '2/candidate' || '2/edge')
-          || (github.ref_type == 'tag' && 'latest/candidate'
-            || vars.SNAPCRAFT_CHANNEL || 'latest/edge') }}
+        ${{
+          (startsWith(github.ref, 'refs/heads/2.x') && '2/edge')
+          || (startsWith(github.ref, 'refs/tags/v2.') && '2/candidate')
+          || (github.ref_type == 'tag' && 'latest/candidate')
+          || vars.SNAPCRAFT_CHANNEL || 'latest/edge'
+        }}
       skip-spread-tests: ${{ inputs.skip-spread-tests || false }}
     secrets:
       publish-credentials: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
