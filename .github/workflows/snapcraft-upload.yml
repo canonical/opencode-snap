@@ -88,11 +88,29 @@ jobs:
           set -x
           shopt -s nullglob globstar
 
+          TRACK="${SNAP_CHANNEL%%/*}"
+
           for SNAP_FILE in ./snaps/**/*.snap; do
             [ -f "$SNAP_FILE" ] || continue
-            
+
+            # Guard: refuse to publish a snap whose major version does not
+            # match the target track (opencode_2.0.16_* belongs to track 2,
+            # not latest). A v1.x snap maps to the latest track.
+            SNAP_VERSION="$(basename "$SNAP_FILE" .snap)"
+            SNAP_VERSION="${SNAP_VERSION#*_}"
+            SNAP_VERSION="${SNAP_VERSION%%_*}"
+            SNAP_MAJOR="${SNAP_VERSION%%.*}"
+            EXPECTED_TRACK="latest"
+            if [ "$SNAP_MAJOR" != "1" ]; then
+              EXPECTED_TRACK="$SNAP_MAJOR"
+            fi
+            if [ "$TRACK" != "$EXPECTED_TRACK" ]; then
+              echo "::error::Refusing to publish $SNAP_FILE (version $SNAP_VERSION, track $EXPECTED_TRACK) to $SNAP_CHANNEL"
+              exit 1
+            fi
+
             echo "Publishing $SNAP_FILE to $SNAP_CHANNEL"
-            
+
             SNAP_NAME="$(basename "$SNAP_FILE")"
             SNAP_NAME="${SNAP_NAME%.snap}"
             SNAP_NAME="${SNAP_NAME%%_*}"

@@ -32,21 +32,60 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Derive the snap store track from the git ref: v1.* tags and main/master/
+  # develop map to the latest track; vN.* tags (N > 1) and N.x maintenance
+  # branches map to the N track. Tags go to <track>/candidate, branches to
+  # <track>/edge (or vars.SNAPCRAFT_CHANNEL when set). Keeping this logic in
+  # one place, generic over the major version, keeps main and maintenance
+  # branches uniform and avoids ref-prefix bugs (tags have refs/tags/ refs).
+  route:
+    name: route channel
+    runs-on: ubuntu-26.04
+    outputs:
+      snapstore-channel: ${{ steps.route.outputs.snapstore-channel }}
+    steps:
+      - name: Resolve snap store channel
+        id: route
+        env:
+          REF: ${{ github.ref }}
+          REF_TYPE: ${{ github.ref_type }}
+          OVERRIDE: ${{ vars.SNAPCRAFT_CHANNEL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          track=latest
+          major=""
+          case "$REF" in
+            refs/tags/v*.*.*)
+              major="${REF#refs/tags/v}"
+              major="${major%%.*}"
+              ;;
+            refs/heads/*)
+              branch="${REF#refs/heads/}"
+              case "$branch" in
+                main|master|develop) ;;
+                *.x|*.x/*) major="${branch%%.*}" ;;
+              esac
+              ;;
+          esac
+          if [ -n "$major" ] && [ "$major" != "1" ]; then
+            track="$major"
+          fi
+          case "$REF_TYPE" in
+            tag) channel="$track/candidate" ;;
+            *)   channel="${OVERRIDE:-$track/edge}" ;;
+          esac
+          echo "Resolved $REF ($REF_TYPE) -> $channel"
+          echo "snapstore-channel=$channel" >> "$GITHUB_OUTPUT"
+
   snap-build-test-publish:
+    needs: route
     uses: ./.github/workflows/tasteful-crafts.yml
-    # Branch builds publish to vars.SNAPCRAFT_CHANNEL when set, otherwise to
-    # latest/edge. Tag builds publish to latest/candidate, except tags on the
-    # 2.x series (v2.*) and the 2.x branch itself, which route to the 2/ track
-    # (2/candidate and 2/edge respectively). Create matching GitHub environments
-    # and add an environment secret named SNAPCRAFT_STORE_CREDENTIALS to each one.
+    # Create a GitHub environment per publish channel (latest/edge,
+    # latest/candidate, 2/edge, 2/candidate, ...) and add an environment
+    # secret named SNAPCRAFT_STORE_CREDENTIALS to each one.
     with:
-      snapstore-channel: >-
-        ${{
-          (startsWith(github.ref, 'refs/heads/2.x') && '2/edge')
-          || (startsWith(github.ref, 'refs/tags/v2.') && '2/candidate')
-          || (github.ref_type == 'tag' && 'latest/candidate')
-          || vars.SNAPCRAFT_CHANNEL || 'latest/edge'
-        }}
+      snapstore-channel: ${{ needs.route.outputs.snapstore-channel }}
       skip-spread-tests: ${{ inputs.skip-spread-tests || false }}
     secrets:
       publish-credentials: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}

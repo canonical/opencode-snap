@@ -30,7 +30,33 @@ All CI workflows live under `.github/workflows/`:
 
 The `build.yml` entrypoint runs when `snap/snapcraft.yaml`, `spread.yaml`,
 `tests/**`, or `.image-garden.mk` change. It triggers on push to `main`,
-`master`, `develop`, and on `v*` tags, as well as on pull requests.
+`master`, `develop`, `2.x*`, and on `v*` tags, as well as on pull requests.
+
+### Store channel routing and the 2/ track
+
+Channel routing is derived from the git ref in one place: the `route` job in
+`build.yml`. It is generic over the major version, so `main` and maintenance
+branches share identical logic:
+
+| Ref                         | Channel           |
+| --------------------------- | ----------------- |
+| push to `main`/`master`/`develop` | `latest/edge` (or `vars.SNAPCRAFT_CHANNEL`) |
+| push to an `N.x` branch (e.g. `2.x`) | `N/edge` (e.g. `2/edge`) |
+| `v1.*` tag                  | `latest/candidate` |
+| `vN.*` tag, N > 1 (e.g. `v2.0.16`) | `N/candidate` (e.g. `2/candidate`) |
+
+Each publish channel needs a matching GitHub environment (named exactly like
+the channel, e.g. `2/candidate`, `2/stable`) holding a
+`SNAPCRAFT_STORE_CREDENTIALS` secret.
+
+As a guardrail, `snapcraft-upload.yml` refuses to publish a snap whose major
+version (from the artifact filename, e.g. `opencode_2.0.16_amd64.snap`) does
+not match the target track — a v2.x snap can never land on the `latest`
+track.
+
+Promotion (`snapcraft-promote.yml`) is manual and takes a `track` choice
+(`latest` or `2`) plus a risk (`beta`/`stable`); it promotes
+`<track>/candidate` → `<track>/<risk>`.
 
 ### External actions
 

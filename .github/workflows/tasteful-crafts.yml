@@ -242,9 +242,9 @@ jobs:
   #   --acls=package_upload,package_release <token-name>
   snapcraft-upload:
     name: snapcraft upload
-    # Only publish tags and main branch pushes/dispatches. Never publish from
-    # pull requests or ad-hoc test branches.
-    if: ${{ !failure() && github.event_name != 'pull_request' && (github.ref_type == 'tag' || github.ref == 'refs/heads/main') }}
+    # Only publish tags and maintenance branch pushes/dispatches (main or
+    # N.x). Never publish from pull requests or ad-hoc test branches.
+    if: ${{ !failure() && github.event_name != 'pull_request' && (github.ref_type == 'tag' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop' || endsWith(github.ref, '.x')) }}
     needs: [snapcraft-pack-amd64, snapcraft-pack-arm64, spread-amd64]
     uses: ./.github/workflows/snapcraft-upload.yml
     with:
