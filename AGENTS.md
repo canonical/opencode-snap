@@ -136,6 +136,12 @@ Spread tests live under `tests/smoke/`:
   are on PATH via the wrappers.
 - `tests/smoke/desktop-wrapper/task.yaml` — verifies the desktop component
   binary path used by the wrapper exists and is executable.
+- `tests/smoke/apparmor-onexec/task.yaml` — Ubuntu/Debian only. Verifies
+  that opencode and the processes it spawns run `unconfined` rather than
+  under the snap's complain-mode AppArmor label, so they can run a
+  strictly-confined snap (`hello-world`) with its output redirected to a
+  file (canonical/pi-coding-agent-snap#26). Uses `BUN_BE_BUN=1` to run a
+  probe script with opencode's embedded Bun.
 - `tests/smoke/joke/task.yaml` — replays a recorded OpenAI-compatible API
   session with the [mannequin](https://snapcraft.io/mannequin) snap
   (`mannequin replay -session joke`) and asserts that
