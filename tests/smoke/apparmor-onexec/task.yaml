@@ -1,0 +1,50 @@
+# SPDX-FileCopyrightText: Canonical Ltd.
+# SPDX-License-Identifier: Apache-2.0
+
+summary: Verify snaps launched by opencode can redirect their output
+details: |
+    snapd gives classic snaps a complain-mode AppArmor profile whose label is
+    inherited by everything they spawn. When such a child is itself a snap,
+    snap-confine rejects file descriptors opened under that label, so e.g.
+    `juju debug-log > file` run by the agent fails with "bad file descriptor"
+    (see https://github.com/canonical/pi-coding-agent-snap/issues/26 and
+    LP: #1849753).
+
+    The CLI wrapper (snap/local/opencode.wrapper) works around this by arming
+    AppArmor's onexec transition before exec'ing opencode, so opencode itself
+    and everything it spawns run unconfined.
+
+    opencode is a Bun-compiled binary, so BUN_BE_BUN=1 makes it run a probe
+    script with its embedded Bun. The script reports its own label and a
+    child's label, and runs a strictly-confined snap (hello-world) with its
+    output redirected to a file from a child.
+
+    Only systems with AppArmor are relevant, so Fedora is excluded.
+
+systems:
+    - ubuntu-*
+    - debian-*
+
+prepare: |
+    snap install hello-world
+    mkdir -p /tmp/apparmor-onexec
+
+execute: |
+    cat > /tmp/apparmor-onexec/cli.js <<'EOF'
+    const fs = require("fs");
+    const cp = require("child_process");
+    const f = "/proc/self/attr/apparmor/current";
+    console.log("opencode: " + fs.readFileSync(f, "utf8").replace(/\0/g, "").trim());
+    console.log("child: " + cp.execFileSync("cat", [f]).toString().replace(/\0/g, "").trim());
+    console.log(cp.execFileSync("sh", ["-c",
+      "snap run hello-world > /tmp/apparmor-onexec/cli-redirect.txt; echo redirect: rc=$?"]).toString().trim());
+    EOF
+    BUN_BE_BUN=1 snap run opencode /tmp/apparmor-onexec/cli.js > cli.txt
+    cat cli.txt
+    MATCH '^opencode: unconfined$' < cli.txt
+    MATCH '^child: unconfined$' < cli.txt
+    MATCH '^redirect: rc=0$' < cli.txt
+    MATCH 'Hello World!' < /tmp/apparmor-onexec/cli-redirect.txt
+
+restore: |
+    rm -rf /tmp/apparmor-onexec cli.txt
