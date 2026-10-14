@@ -136,6 +136,16 @@ Spread tests live under `tests/smoke/`:
   are on PATH via the wrappers.
 - `tests/smoke/desktop-wrapper/task.yaml` — verifies the desktop component
   binary path used by the wrapper exists and is executable.
+- `tests/smoke/apparmor-onexec/task.yaml` — Ubuntu/Debian only. Verifies
+  that processes spawned by the CLI and the desktop app run `unconfined`
+  rather than under the snap's complain-mode AppArmor label, so they can run
+  a strictly-confined snap (`hello-world`) with its output redirected to a
+  file (canonical/pi-coding-agent-snap#26). The CLI side uses `BUN_BE_BUN=1`
+  to run a probe script with opencode's embedded Bun. The desktop side
+  launches the app under Xvfb with `$SHELL` pointed at a probe script, which
+  the main process runs at startup to load the user's environment. It also
+  checks that the main process keeps its snap label, which the dock uses
+  for window grouping.
 - `tests/smoke/joke/task.yaml` — replays a recorded OpenAI-compatible API
   session with the [mannequin](https://snapcraft.io/mannequin) snap
   (`mannequin replay -session joke`) and asserts that
@@ -167,6 +177,7 @@ are available as:
 | `snap/local/opencode.wrapper`         | CLI wrapper script          |
 | `snap/local/opencode-desktop.wrapper` | Desktop GUI wrapper script  |
 | `snap/local/opencode.opencode`        | Bash completion script      |
+| `snap/local/apparmor-onexec.js`       | Prepended to the desktop app's Electron bundles so its children run unconfined |
 | `tests/smoke/opencode/task.yaml`      | Smoke test                  |
 | `tests/smoke/joke/task.yaml`          | Offline LLM replay test (mannequin) |
 | `tests/smoke/joke/recordings/joke/`   | Recorded OpenAI-compatible session |

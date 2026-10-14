@@ -133,6 +133,15 @@ parts:
       # Disable auto-updater for the snap
       sed -i 's/\(var\|let\|const\) UPDATER_ENABLED = .*/const UPDATER_ENABLED = false/' out/main/index.js
 
+      # Arm an AppArmor onexec transition in the main and sidecar processes so
+      # everything they spawn runs unconfined, while the app itself keeps the
+      # snap label that the dock uses to group its windows. See
+      # snap/local/apparmor-onexec.js.
+      for f in out/main/index.js out/main/sidecar.js; do
+        cat "$CRAFT_PROJECT_DIR/snap/local/apparmor-onexec.js" "$f" > "$f.tmp"
+        mv "$f.tmp" "$f"
+      done
+
       # Override prod appId so electron-builder uses opencode_desktop everywhere
       # (extraMetadata.desktopName, executableName, StartupWMClass).
       # This matches the snap-installed opencode_desktop.desktop file.

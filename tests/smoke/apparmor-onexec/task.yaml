@@ -1,0 +1,123 @@
+# SPDX-FileCopyrightText: Canonical Ltd.
+# SPDX-License-Identifier: Apache-2.0
+
+summary: Verify snaps launched by opencode can redirect their output
+details: |
+    snapd gives classic snaps a complain-mode AppArmor profile whose label is
+    inherited by everything they spawn. When such a child is itself a snap,
+    snap-confine rejects file descriptors opened under that label, so e.g.
+    `juju debug-log > file` run by the agent fails with "bad file descriptor"
+    (see https://github.com/canonical/pi-coding-agent-snap/issues/26 and
+    LP: #1849753).
+
+    The snap works around this by arming AppArmor's onexec transition so that
+    spawned processes run unconfined:
+
+      - the CLI wrapper (snap/local/opencode.wrapper) arms it before exec'ing
+        opencode, so opencode itself and its children run unconfined;
+      - the desktop app has snap/local/apparmor-onexec.js prepended to its
+        Electron main and sidecar bundles, so the app keeps the snap label
+        (which the dock uses to group its windows) while its children run
+        unconfined.
+
+    The test runs a strictly-confined snap (hello-world) with its output
+    redirected to a file from a process spawned by each app. For the desktop
+    app, the spawned process is the login-shell probe the main process runs
+    at startup to load the user's environment (`$SHELL -il -c "env -0"`), so
+    $SHELL is pointed at a probe script. The desktop app is run under Xvfb.
+
+    Only systems with AppArmor are relevant, so Fedora is excluded.
+
+systems:
+    - ubuntu-*
+    - debian-*
+
+prepare: |
+    snap install hello-world
+
+    # Xvfb plus the shared libraries Electron needs, which cloud images lack.
+    apt-get update
+    apt-get install -y xvfb xauth libnss3 libgbm1 libgtk-3-0t64 libasound2t64 libcups2t64
+
+    mkdir -p /tmp/apparmor-onexec
+    cat > /tmp/apparmor-onexec/probe-shell <<'EOF'
+    #!/bin/sh
+    # Stand-in login shell for the desktop app's shell-environment probe.
+    tr -d '\0' < /proc/self/attr/apparmor/current > /tmp/apparmor-onexec/shell-label.txt
+    snap run hello-world > /tmp/apparmor-onexec/redirect.txt 2> /tmp/apparmor-onexec/redirect.err
+    echo $? > /tmp/apparmor-onexec/redirect.rc
+    exec /bin/sh "$@"
+    EOF
+    chmod +x /tmp/apparmor-onexec/probe-shell
+
+execute: |
+    label() {
+        tr -d '\0' < "/proc/$1/attr/apparmor/current"
+    }
+    # Print the PIDs of desktop app processes whose arguments match $1.
+    desktop_pids() {
+        ps -eo pid=,args= | awk -v re="$1" '$2 ~ /\/opencode_desktop$/ && $0 ~ re {print $1}'
+    }
+
+    # 1. CLI: opencode is a Bun-compiled binary, so BUN_BE_BUN=1 makes it run
+    #    a script that reports its own label, a child's label, and the result
+    #    of redirecting a snap's output from a child.
+    cat > /tmp/apparmor-onexec/cli.js <<'EOF'
+    const fs = require("fs");
+    const cp = require("child_process");
+    const f = "/proc/self/attr/apparmor/current";
+    console.log("opencode: " + fs.readFileSync(f, "utf8").replace(/\0/g, "").trim());
+    console.log("child: " + cp.execFileSync("cat", [f]).toString().replace(/\0/g, "").trim());
+    console.log(cp.execFileSync("sh", ["-c",
+      "snap run hello-world > /tmp/apparmor-onexec/cli-redirect.txt; echo redirect: rc=$?"]).toString().trim());
+    EOF
+    BUN_BE_BUN=1 snap run opencode /tmp/apparmor-onexec/cli.js > cli.txt
+    cat cli.txt
+    MATCH '^opencode: unconfined$' < cli.txt
+    MATCH '^child: unconfined$' < cli.txt
+    MATCH '^redirect: rc=0$' < cli.txt
+    MATCH 'Hello World!' < /tmp/apparmor-onexec/cli-redirect.txt
+
+    # 2. Desktop: launch the app the way a desktop session would, as a
+    #    transient unit so restore can stop it however the task ends.
+    systemd-run --unit=opencode-desktop-onexec --collect \
+        -E SHELL=/tmp/apparmor-onexec/probe-shell -E HOME=/root \
+        xvfb-run -a snap run opencode.desktop
+
+    # Wait for the shell probe to finish and the sidecar (Electron's
+    # NodeService utility process) to start.
+    SIDECAR=
+    for _ in $(seq 90); do
+        SIDECAR=$(desktop_pids 'node[.]mojom[.]NodeService')
+        if [ -e /tmp/apparmor-onexec/redirect.rc ] && [ -n "$SIDECAR" ]; then
+            break
+        fi
+        sleep 1
+    done
+    MAIN=$(desktop_pids '^ *[0-9]+ [^ ]+ --no-sandbox$')
+    echo "main ($MAIN): $(label "$MAIN")"
+    echo "sidecar ($SIDECAR): $(label "$SIDECAR")"
+    echo "shell probe: $(cat /tmp/apparmor-onexec/shell-label.txt)"
+    echo "redirect: rc=$(cat /tmp/apparmor-onexec/redirect.rc)"
+    cat /tmp/apparmor-onexec/redirect.err
+
+    # The app itself keeps the label snapd gives the desktop app, so the dock
+    # can group its windows.
+    SNAP_LABEL=$(snap run --shell opencode.desktop -c "tr -d '\\0' < /proc/self/attr/apparmor/current")
+    echo "snap label: $SNAP_LABEL"
+    test "$(label "$MAIN")" = "$SNAP_LABEL"
+    # Processes spawned by the main process run unconfined, and can redirect
+    # a snap's output to a file.
+    test "$(cat /tmp/apparmor-onexec/shell-label.txt)" = unconfined
+    test "$(cat /tmp/apparmor-onexec/redirect.rc)" = 0
+    MATCH 'Hello World!' < /tmp/apparmor-onexec/redirect.txt
+    # The sidecar, which runs the agent's commands, is either unconfined
+    # already or has the onexec transition armed for its children.
+    SIDECAR_EXEC=$(tr -d '\0' < "/proc/$SIDECAR/attr/apparmor/exec" 2>/dev/null || true)
+    test "$(label "$SIDECAR")" = unconfined || test "$SIDECAR_EXEC" = unconfined
+
+restore: |
+    journalctl -u opencode-desktop-onexec --no-pager 2>&1 | tail -n 50 || true
+    systemctl stop opencode-desktop-onexec 2>/dev/null || true
+    systemctl reset-failed opencode-desktop-onexec 2>/dev/null || true
+    rm -rf /tmp/apparmor-onexec cli.txt
