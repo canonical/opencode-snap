@@ -45,6 +45,11 @@ branches share identical logic:
 | `v1.*` tag                  | `latest/candidate` |
 | `vN.*` tag, N > 1 (e.g. `v2.0.16`) | `N/candidate` (e.g. `2/candidate`) |
 
+A packaging-only re-release of an already-packaged upstream version uses a
+`+snapN` suffix (e.g. `v2.0.16+snap1`, N ≥ 1). It routes like the plain tag,
+and `release.yml` accepts it as long as the base tag matches the packaged
+`source-tag`. In release notes, `+snapN` tags sort after the plain tag.
+
 Each publish channel needs a matching GitHub environment (named exactly like
 the channel, e.g. `2/candidate`, `2/stable`) holding a
 `SNAPCRAFT_STORE_CREDENTIALS` secret.
