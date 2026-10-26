@@ -89,5 +89,9 @@ jobs:
       # pkgproxy is opt-in: set the ENABLE_PKGPROXY repository variable to
       # 'true' to route builds through the caching proxy.
       enable-pkgproxy: ${{ vars.ENABLE_PKGPROXY == 'true' }}
+      # LXD 6.10 refuses to launch images from simplestreams remotes that
+      # have no image registry, which includes pkgproxy's LXD remote. Stay on
+      # 5.21 until pkgproxy creates registries for its remotes.
+      lxd-channel: 5.21/stable
     secrets:
       publish-credentials: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
