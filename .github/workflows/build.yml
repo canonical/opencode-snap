@@ -87,5 +87,8 @@ jobs:
     with:
       snapstore-channel: ${{ needs.route.outputs.snapstore-channel }}
       skip-spread-tests: ${{ inputs.skip-spread-tests || false }}
+      # pkgproxy is opt-in: set the ENABLE_PKGPROXY repository variable to
+      # 'true' to route builds through the caching proxy.
+      enable-pkgproxy: ${{ vars.ENABLE_PKGPROXY == 'true' }}
     secrets:
       publish-credentials: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}

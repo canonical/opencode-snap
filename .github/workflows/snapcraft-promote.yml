@@ -34,6 +34,7 @@ jobs:
         uses: actions/checkout@v7.0.1
 
       - name: Set up pkgproxy caching proxy
+        if: ${{ vars.ENABLE_PKGPROXY == 'true' }}
         id: pkgproxy
         uses: zyga/setup-pkgproxy@v1
 
@@ -75,7 +76,7 @@ jobs:
             "$SNAP_NAME"
 
       - name: Prepare pkgproxy package cache for GitHub cache save
-        if: ${{ always() }}
+        if: ${{ vars.ENABLE_PKGPROXY == 'true' && always() }}
         shell: bash
         run: |
           sudo systemctl stop pkgproxy.service || true
@@ -84,7 +85,7 @@ jobs:
       # Save only when the stable success key wasn't an exact hit (GitHub caches
       # are immutable; a warm cache needs no rewrite).
       - name: Save pkgproxy package cache
-        if: ${{ steps.pkgproxy.outputs.package-cache-hit != 'true' }}
+        if: ${{ vars.ENABLE_PKGPROXY == 'true' && steps.pkgproxy.outputs.package-cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
           path: /var/cache/pkgproxy
