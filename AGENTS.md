@@ -180,6 +180,7 @@ are available as:
 | `snap/local/opencode.wrapper`         | CLI wrapper script          |
 | `snap/local/opencode-desktop.wrapper` | Desktop GUI wrapper script  |
 | `snap/local/opencode.opencode`        | Bash completion script      |
+| `snap/local/fix-upstream-patches.sh`  | Swaps malformed upstream `patches/*.patch` (known-broken sha256 only) for the repaired copies in `snap/local/patches/` before `bun install` |
 | `snap/local/apparmor-onexec.js`       | Prepended to the desktop app's Electron bundles so its children run unconfined |
 | `tests/smoke/opencode/task.yaml`      | Smoke test                  |
 | `tests/smoke/joke/task.yaml`          | Offline LLM replay test (mannequin) |

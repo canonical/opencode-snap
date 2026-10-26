@@ -69,6 +69,9 @@ parts:
       # Use bun from build environment
       echo "Using bun: $(bun --version)"
 
+      # Repair upstream patches that bun 1.4.4 refuses to apply
+      "$CRAFT_PROJECT_DIR"/snap/local/fix-upstream-patches.sh .
+
       # Install workspace dependencies
       bun install --frozen-lockfile
 
@@ -114,6 +117,9 @@ parts:
     override-build: |
       # Use bun from build environment
       echo "Using bun: $(bun --version)"
+
+      # Repair upstream patches that bun 1.4.4 refuses to apply
+      "$CRAFT_PROJECT_DIR"/snap/local/fix-upstream-patches.sh .
 
       # Install workspace dependencies
       bun install --frozen-lockfile
