@@ -73,7 +73,10 @@ systemd unit whose `RuntimeDirectory=`/`CacheDirectory=` create
 host's apt/snapd at the proxy. It exposes `package-cache-hit` and
 `package-cache-key-success` / `package-cache-key-partial` outputs so the caller
 saves the payload cache under the same stable per-arch key the restore used,
-only on a cache miss. Snapcraft-specific LXD wiring (the build container
+only on a cache miss. pkgproxy is **opt-in**: it is used only when the
+`ENABLE_PKGPROXY` repository variable is `'true'` (`build.yml` passes it as
+the `enable-pkgproxy` input; `snapcraft-promote.yml` checks it directly).
+Snapcraft-specific LXD wiring (the build container
 profile, pre-start hook, and image remote) stays in `snapcraft-pack.yml`.
 
 ### Renovate
