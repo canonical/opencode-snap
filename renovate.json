@@ -53,5 +53,17 @@
       "extractVersionTemplate": "^bun-v(?<version>.+)$",
       "versioningTemplate": "semver-coerced"
     }
+  ],
+  "packageRules": [
+    {
+      "description": "Keep main on the opencode 1.x line; 2.x is tracked on the 2.x branch",
+      "matchBaseBranches": [
+        "main"
+      ],
+      "matchPackageNames": [
+        "anomalyco/opencode"
+      ],
+      "allowedVersions": "<2"
+    }
   ]
 }
