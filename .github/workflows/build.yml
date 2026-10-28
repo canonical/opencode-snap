@@ -4,15 +4,16 @@ name: Build
 
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [ main, master, develop, '1.x*' ]
     tags: [ 'v*' ]
     paths:
       - 'snap/snapcraft.yaml'
       - '.image-garden.mk'
       - 'spread.yaml'
       - 'tests/**'
+      - '.github/workflows/build.yml'
   pull_request:
-    branches: [ main, master, develop ]
+    branches: [ main, master, develop, '1.x*' ]
     paths:
       - 'snap/snapcraft.yaml'
       - '.image-garden.mk'
@@ -31,11 +32,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Derive the snap store track from the git ref: v1.* tags and main/master/
-  # develop map to the latest track; vN.* tags (N > 1) and N.x maintenance
-  # branches map to the N track. Tags go to <track>/candidate, branches to
-  # <track>/edge (or vars.SNAPCRAFT_CHANNEL when set). Keeping this logic in
-  # one place, generic over the major version, keeps main and maintenance
+  # Derive the snap store track from the git ref: v1.* tags, the 1.x branch
+  # and main/master/develop map to the latest track; vN.* tags (N > 1) and
+  # N.x maintenance branches map to the N track. Tags go to <track>/candidate,
+  # branches to <track>/edge (or vars.SNAPCRAFT_CHANNEL when set). Keeping
+  # this logic in one place, generic over the major version, keeps all N.x
   # branches uniform and avoids ref-prefix bugs (tags have refs/tags/ refs).
   route:
     name: route channel
