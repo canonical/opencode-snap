@@ -1,9 +1,10 @@
 ## CI
 
-Builds are triggered on push to `main`, `master`, `develop`, and on tags (`v*`).
+Builds are triggered on push to the `N.x` branches (`1.x`, `2.x`) and on tags
+(`v*`). `2.x` is the default branch; there is no `main`.
 
-- Branch builds publish to `latest/edge`
-- Tag builds publish to `latest/candidate`
+- `1.x` branch builds publish to `latest/edge`, `2.x` to `2/edge`
+- `v1.*` tag builds publish to `latest/candidate`, `v2.*` to `2/candidate`
 
 The CI builds for both amd64 and arm64 in parallel using GitHub-hosted runners
 (`ubuntu-24.04` and `ubuntu-24.04-arm`).
@@ -44,7 +45,7 @@ release notes aggregated from merged Renovate PRs.
 
 - Trigger manually from **Actions -> release -> Run workflow**
   - `version`: tag to create (for example `v1.15.11`)
-  - `target`: branch to tag from (defaults to `main`)
+  - `target`: branch to tag from (defaults to `1.x` for `v1.*`, `2.x` for `v2.*`)
 - You can also push a tag manually (`git tag vX.Y.Z && git push origin vX.Y.Z`);
   the workflow runs on `v*` tags and will create or update the matching release.
 

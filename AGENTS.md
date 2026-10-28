@@ -28,20 +28,28 @@ All CI workflows live under `.github/workflows/`:
 | `tasteful-crafts.yml`   | Shared build/test/publish workflow           |
 | `spread.yml`            | Integration tests via spread                 |
 
+### Branches
+
+Each opencode major series has its own `N.x` branch: `1.x` packages opencode
+1.x (published to the `latest` track) and `2.x` packages opencode 2.x
+(published to the `2` track). There is no `main` branch; `2.x` is the GitHub
+default branch, so it is also where Renovate reads its configuration from.
+
 The `build.yml` entrypoint runs when `snap/snapcraft.yaml`, `spread.yaml`,
-`tests/**`, or `.image-garden.mk` change. It triggers on push to `main`,
-`master`, `develop`, `2.x*`, and on `v*` tags, as well as on pull requests.
+`tests/**`, `.image-garden.mk`, or `build.yml` itself change. It triggers on
+push to the branch's own `N.x*` pattern (plus `main`, `master`, `develop`), on
+`v*` tags, and on pull requests against those branches.
 
 ### Store channel routing and the 2/ track
 
 Channel routing is derived from the git ref in one place: the `route` job in
-`build.yml`. It is generic over the major version, so `main` and maintenance
-branches share identical logic:
+`build.yml`. It is generic over the major version, so all `N.x` branches
+share identical logic:
 
 | Ref                         | Channel           |
 | --------------------------- | ----------------- |
-| push to `main`/`master`/`develop` | `latest/edge` (or `vars.SNAPCRAFT_CHANNEL`) |
-| push to an `N.x` branch (e.g. `2.x`) | `N/edge` (e.g. `2/edge`) |
+| push to `1.x` (or `main`/`master`/`develop`) | `latest/edge` (or `vars.SNAPCRAFT_CHANNEL`) |
+| push to an `N.x` branch, N > 1 (e.g. `2.x`) | `N/edge` (e.g. `2/edge`) |
 | `v1.*` tag                  | `latest/candidate` |
 | `vN.*` tag, N > 1 (e.g. `v2.0.16`) | `N/candidate` (e.g. `2/candidate`) |
 
@@ -87,8 +95,10 @@ profile, pre-start hook, and image remote) stays in `snapcraft-pack.yml`.
 ### Renovate
 
 Renovate is configured via `renovate.json` to bump dependencies (bun) and opencode
-versions automatically. The `source-tag` field in `snap/snapcraft.yaml`
-references a specific OpenCode release tag (currently `v1.15.10`).
+versions automatically. Only the copy on the default branch (`2.x`) is read:
+it lists `1.x` and `2.x` in `baseBranchPatterns` and pins each branch to its
+own opencode major with `allowedVersions`. The `source-tag` field in
+`snap/snapcraft.yaml` references a specific OpenCode release tag (currently `v1.15.10`).
 
 ## Architecture
 

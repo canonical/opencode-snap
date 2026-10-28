@@ -3,6 +3,10 @@
   "extends": [
     "config:recommended"
   ],
+  "baseBranchPatterns": [
+    "1.x",
+    "2.x"
+  ],
   "ignorePaths": [
     "**/node_modules/**",
     "**/bower_components/**",
@@ -65,6 +69,28 @@
       "depNameTemplate": "oven-sh/bun",
       "extractVersionTemplate": "^bun-v(?<version>.+)$",
       "versioningTemplate": "semver-coerced"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Keep 1.x on the opencode 1.x line",
+      "matchBaseBranches": [
+        "1.x"
+      ],
+      "matchPackageNames": [
+        "anomalyco/opencode"
+      ],
+      "allowedVersions": "<2"
+    },
+    {
+      "description": "Keep 2.x on the opencode 2.x line",
+      "matchBaseBranches": [
+        "2.x"
+      ],
+      "matchPackageNames": [
+        "anomalyco/opencode"
+      ],
+      "allowedVersions": "<3"
     }
   ]
 }
