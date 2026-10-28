@@ -10,9 +10,8 @@ on:
         required: true
         type: string
       target:
-        description: Branch to tag from
+        description: Branch to tag from (defaults to the N.x branch matching the version's major, for example 1.x or 2.x)
         required: false
-        default: main
         type: string
   push:
     tags:
@@ -38,12 +37,15 @@ jobs:
           script: |
             const isDispatch = context.eventName === "workflow_dispatch";
             const version = isDispatch ? context.payload.inputs?.version : context.ref.replace("refs/tags/", "");
-            const target = isDispatch ? (context.payload.inputs?.target || "main") : context.payload.repository.default_branch;
 
             if (!version || !/^v\d+\.\d+\.\d+(?:[-+].*)?$/.test(version)) {
               core.setFailed(`Invalid tag '${version}'. Use format v<major>.<minor>.<patch>.`);
               return;
             }
+
+            // Each opencode major series lives on its own N.x branch.
+            const major = version.slice(1).split(".")[0];
+            const target = isDispatch ? (context.payload.inputs?.target || `${major}.x`) : context.payload.repository.default_branch;
 
             core.setOutput("tag", version);
             core.setOutput("target", target);

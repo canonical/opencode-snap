@@ -235,15 +235,15 @@ jobs:
       snap-filename: ${{ needs.snapcraft-pack-amd64.outputs.snap-filename }}
 
   # Create GitHub environments that match the deployment target names used
-  # here (latest/edge for main branch builds, latest/candidate for tag builds
+  # here (latest/edge for 1.x branch builds, latest/candidate for tag builds
   # by default), then add an environment secret named
   # SNAPCRAFT_STORE_CREDENTIALS. Export the secret value locally with:
   # snapcraft export-login --snaps=<snap-name> --channels=<publish-channel> \
   #   --acls=package_upload,package_release <token-name>
   snapcraft-upload:
     name: snapcraft upload
-    # Only publish tags and maintenance branch pushes/dispatches (main or
-    # N.x). Never publish from pull requests or ad-hoc test branches.
+    # Only publish tags and maintenance branch pushes/dispatches (N.x, e.g.
+    # 1.x or 2.x). Never publish from pull requests or ad-hoc test branches.
     if: ${{ !failure() && github.event_name != 'pull_request' && (github.ref_type == 'tag' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop' || endsWith(github.ref, '.x')) }}
     needs: [snapcraft-pack-amd64, snapcraft-pack-arm64, spread-amd64]
     uses: ./.github/workflows/snapcraft-upload.yml
