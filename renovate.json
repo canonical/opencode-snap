@@ -22,6 +22,7 @@
       ],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "anomalyco/opencode",
+      "extractVersionTemplate": "^v(?<version>.+)$",
       "versioningTemplate": "semver"
     },
     {
@@ -48,6 +49,7 @@
       ],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "anomalyco/opencode",
+      "extractVersionTemplate": "^v(?<version>.+)$",
       "versioningTemplate": "semver"
     },
     {
