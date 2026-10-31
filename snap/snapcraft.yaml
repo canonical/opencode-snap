@@ -57,7 +57,7 @@ parts:
     source-type: git
     # Pin to the latest v2 tag (upstream publishes tags but no GitHub
     # releases for v2).
-    source-tag: v2.2.1
+    source-tag: v2.2.5
     build-packages:
       - build-essential
     build-environment:
