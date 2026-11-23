@@ -57,7 +57,7 @@ parts:
     source-type: git
     # Pin to the latest v2 tag (upstream publishes tags but no GitHub
     # releases for v2).
-    source-tag: v2.3.0
+    source-tag: v2.4.1
     build-packages:
       - build-essential
     build-environment:
@@ -101,7 +101,7 @@ parts:
   wl-clipboard:
     plugin: meson
     source: https://github.com/bugaevc/wl-clipboard.git
-    source-tag: v2.3.0
+    source-tag: v2.4.1
     build-packages:
       - meson
       - ninja-build
