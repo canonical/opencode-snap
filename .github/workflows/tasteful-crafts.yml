@@ -129,6 +129,10 @@ jobs:
         if: ${{ fromJSON(inputs.enable-pkgproxy) }}
         id: pkgproxy
         uses: zyga/setup-pkgproxy@v2
+        with:
+          # Read-only: same-arch jobs share one cache; the pack jobs are
+          # the designated savers (see snapcraft-pack.yml).
+          save-package-cache: never
 
       - name: Install snapd, core24, and image-garden snaps
         shell: bash

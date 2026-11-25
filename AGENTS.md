@@ -94,7 +94,12 @@ branches restore the default branch's cache but never save, and a job that
 added nothing to the cache saves nothing. Outputs are `addr`,
 `package-cache-restored-key` and `package-cache-key` (v1's
 `package-cache-hit` / `package-cache-key-success` / `package-cache-key-partial`
-are gone). pkgproxy is **opt-in**: it is used only when the
+are gone). The same-arch jobs share one per-arch cache, so only the
+`snapcraft-pack.yml` jobs (amd64 and arm64) save it: the spread matrix,
+`discover-spread-systems`, `snapcraft-upload` and `snapcraft-promote` all
+run the action with `save-package-cache: never` (restore-only), or each
+run would save several near-identical copies of the same arch's cache.
+pkgproxy is **opt-in**: it is used only when the
 `ENABLE_PKGPROXY` repository variable is `'true'` (`build.yml` passes it as
 the `enable-pkgproxy` input; `snapcraft-promote.yml` checks it directly).
 Snapcraft-specific LXD wiring (the build container
