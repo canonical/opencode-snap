@@ -128,7 +128,7 @@ jobs:
       - name: Set up pkgproxy caching proxy
         if: ${{ fromJSON(inputs.enable-pkgproxy) }}
         id: pkgproxy
-        uses: zyga/setup-pkgproxy@v1
+        uses: zyga/setup-pkgproxy@v2
 
       - name: Install snapd, core24, and image-garden snaps
         shell: bash
@@ -146,20 +146,6 @@ jobs:
             done
           fi
           sudo snap install "$TARGET" --channel "${{ inputs.image-garden-channel }}"
-
-      - name: Prepare pkgproxy package cache for GitHub cache save
-        if: ${{ fromJSON(inputs.enable-pkgproxy) && always() }}
-        shell: bash
-        run: |
-          sudo systemctl stop pkgproxy.service || true
-          sudo chown -R "$USER:$USER" /var/cache/pkgproxy
-
-      - name: Save pkgproxy package cache
-        if: ${{ fromJSON(inputs.enable-pkgproxy) && steps.pkgproxy.outputs.package-cache-hit != 'true' }}
-        uses: actions/cache/save@v6
-        with:
-          path: /var/cache/pkgproxy
-          key: ${{ steps.pkgproxy.outputs.package-cache-key-success }}
 
       - name: Use spread from image-garden snap
         run: sudo snap alias image-garden.spread spread

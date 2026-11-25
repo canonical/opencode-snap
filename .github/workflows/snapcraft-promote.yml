@@ -36,7 +36,7 @@ jobs:
       - name: Set up pkgproxy caching proxy
         if: ${{ vars.ENABLE_PKGPROXY == 'true' }}
         id: pkgproxy
-        uses: zyga/setup-pkgproxy@v1
+        uses: zyga/setup-pkgproxy@v2
 
       - name: Install snapcraft snap
         shell: bash
@@ -74,19 +74,3 @@ jobs:
             --to-channel="${{ inputs.track }}/${{ inputs.risk }}" \
             --yes \
             "$SNAP_NAME"
-
-      - name: Prepare pkgproxy package cache for GitHub cache save
-        if: ${{ vars.ENABLE_PKGPROXY == 'true' && always() }}
-        shell: bash
-        run: |
-          sudo systemctl stop pkgproxy.service || true
-          sudo chown -R "$USER:$USER" /var/cache/pkgproxy
-
-      # Save only when the stable success key wasn't an exact hit (GitHub caches
-      # are immutable; a warm cache needs no rewrite).
-      - name: Save pkgproxy package cache
-        if: ${{ vars.ENABLE_PKGPROXY == 'true' && steps.pkgproxy.outputs.package-cache-hit != 'true' }}
-        uses: actions/cache/save@v6
-        with:
-          path: /var/cache/pkgproxy
-          key: ${{ steps.pkgproxy.outputs.package-cache-key-success }}
