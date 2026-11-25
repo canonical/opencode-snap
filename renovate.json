@@ -22,7 +22,7 @@
         "snap/snapcraft\\.yaml"
       ],
       "matchStrings": [
-        "source-tag:\\s*v(?<currentValue>[^\\s]+)"
+        "source:\\s*https://github\\.com/anomalyco/opencode\\n\\s+source-type:\\s*git\\n(?:\\s+#[^\\n]*\\n)*\\s+source-tag:\\s*v(?<currentValue>[^\\s]+)"
       ],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "anomalyco/opencode",
