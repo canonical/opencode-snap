@@ -128,6 +128,11 @@ jobs:
         if: ${{ fromJSON(inputs.enable-pkgproxy) }}
         id: pkgproxy
         uses: zyga/setup-pkgproxy@v2
+        with:
+          # Read-only: every spread matrix job runs on the same arch and
+          # would save a near-identical copy of the shared per-arch cache.
+          # The pack jobs are the designated savers (see snapcraft-pack.yml).
+          save-package-cache: never
 
       - name: Install snapd and core24 snaps
         shell: bash

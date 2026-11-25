@@ -113,7 +113,7 @@ jobs:
           if command -v pkgproxyctl >/dev/null 2>&1; then
             du -sh /var/cache/pkgproxy || true
             du -sh /var/cache/pkgproxy/*/objects 2>/dev/null || true
-            pkgproxyctl stats show || true
+            pkgproxyctl stats || true
           else
             echo "pkgproxy not installed, skipping cache stats"
           fi
@@ -128,7 +128,7 @@ jobs:
           echo "::group::pkgproxy cache statistics (post-build)"
           du -sh /var/cache/pkgproxy || true
           du -sh /var/cache/pkgproxy/*/objects 2>/dev/null || true
-          pkgproxyctl stats show || true
+          pkgproxyctl stats || true
           echo "::endgroup::"
 
       - name: Capture snap output
