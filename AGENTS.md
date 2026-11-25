@@ -83,10 +83,18 @@ pin is a one-file change in that repo, not an edit in every caller),
 installs the binary to `/usr/local/bin`, installs a `pkgproxy.service`
 systemd unit whose `RuntimeDirectory=`/`CacheDirectory=` create
 `/run/pkgproxy` and `/var/cache/pkgproxy`, starts the daemon, and points the
-host's apt/snapd at the proxy. It exposes `package-cache-hit` and
-`package-cache-key-success` / `package-cache-key-partial` outputs so the caller
-saves the payload cache under the same stable per-arch key the restore used,
-only on a cache miss. pkgproxy is **opt-in**: it is used only when the
+host's apt/snapd at the proxy. Since v2 it is a Node.js action whose post
+step (`post-if: always()`) stops pkgproxy and saves the payload cache
+itself — the caller workflows have no "prepare cache" or `actions/cache/save`
+steps. It saves as a `tar --xattrs` archive of `/var/cache/pkgproxy` under
+rolling keys `pkgproxy-cache-v4-<arch>-<run id>-…` (each saver picks a new
+key, the next job restores the newest), only on the repository's default
+branch (`save-package-cache: default-branch`): pull requests and other
+branches restore the default branch's cache but never save, and a job that
+added nothing to the cache saves nothing. Outputs are `addr`,
+`package-cache-restored-key` and `package-cache-key` (v1's
+`package-cache-hit` / `package-cache-key-success` / `package-cache-key-partial`
+are gone). pkgproxy is **opt-in**: it is used only when the
 `ENABLE_PKGPROXY` repository variable is `'true'` (`build.yml` passes it as
 the `enable-pkgproxy` input; `snapcraft-promote.yml` checks it directly).
 Snapcraft-specific LXD wiring (the build container

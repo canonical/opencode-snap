@@ -286,19 +286,3 @@ jobs:
           name: boot-logs
           path: .image-garden/*.log
           if-no-files-found: ignore
-
-      - name: Prepare pkgproxy package cache for GitHub cache save
-        if: ${{ fromJSON(inputs.enable-pkgproxy) && always() }}
-        shell: bash
-        run: |
-          sudo systemctl stop pkgproxy.service || true
-          sudo chown -R "$USER:$USER" /var/cache/pkgproxy
-
-      # Save only when the stable success key wasn't an exact hit (GitHub caches
-      # are immutable; a warm cache needs no rewrite).
-      - name: Save pkgproxy package cache
-        if: ${{ fromJSON(inputs.enable-pkgproxy) && steps.pkgproxy.outputs.package-cache-hit != 'true' }}
-        uses: actions/cache/save@v6
-        with:
-          path: /var/cache/pkgproxy
-          key: ${{ steps.pkgproxy.outputs.package-cache-key-success }}

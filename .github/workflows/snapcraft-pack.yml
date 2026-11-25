@@ -96,29 +96,26 @@ jobs:
           # later as the opaque "lxd forkstart ... exit status 1" during snapcraft pack.
           pkgproxyctl setup snapcraft -addr "${{ steps.pkgproxy.outputs.addr }}" | sudo sh
 
-      - name: Verify pkgproxy provisioned the LXC pre-start hook
+      - name: Verify pkgproxy provisioned the LXC hooks
         if: ${{ fromJSON(inputs.enable-pkgproxy) }}
         shell: bash
         run: |
-          # The hook file the 'snapcraft' profile's raw.lxc points at must exist, be
-          # executable, and be visible to the LXD daemon before snapcraft launches any
-          # build container — or forkstart fails deep inside the build with the opaque
-          # "lxd forkstart ... exit status 1". Read the path straight from the profile
-          # (don't hardcode it) so this checks exactly what LXC will exec.
-          HOOK_PATH=$(lxc profile get default raw.lxc --project snapcraft | sed -n 's/^lxc.hook.pre-start = //p')
-          echo "profile raw.lxc hook path: ${HOOK_PATH:-<unset>}"
-          if [ -z "$HOOK_PATH" ] || ! sudo test -x "$HOOK_PATH"; then
-            echo "::error::pkgproxy pre-start hook not provisioned/executable at '${HOOK_PATH}'" >&2
+          # The 'snapcraft' profile's raw.lxc must carry both of pkgproxy's hooks
+          # (base64-encoded inline, with no hook file on the host) before snapcraft
+          # launches any build container — or container start fails deep inside the
+          # build with the opaque "lxd forkstart ... exit status 1".
+          RAW_LXC=$(lxc profile get default raw.lxc --project snapcraft)
+          if ! printf '%s\n' "$RAW_LXC" | grep -q '^lxc.hook.pre-start = ' ||
+             ! printf '%s\n' "$RAW_LXC" | grep -q '^lxc.hook.post-stop = '; then
+            echo "::error::pkgproxy LXC hooks missing from the snapcraft project's default profile" >&2
             echo "--- pkgproxy profile (project snapcraft) ---"
             lxc profile show default --project snapcraft || true
             echo "--- pkgproxy daemon journal ---"
             sudo journalctl -u pkgproxy.service --no-pager -n 100 || true
-            echo "--- provisioning dirs ---"
-            sudo ls -laR /var/snap/pkgproxy/common/lxd /var/lib/pkgproxy 2>/dev/null || true
             exit 1
           fi
-          echo "pre-start hook present and executable:"
-          sudo ls -l "$HOOK_PATH"
+          echo "pre-start and post-stop hooks present in raw.lxc:"
+          printf '%s\n' "$RAW_LXC"
 
       - name: Configure pkgproxy as cached LXD image remote
         if: ${{ fromJSON(inputs.enable-pkgproxy) }}
@@ -252,27 +249,3 @@ jobs:
             ~/.local/state/snapcraft/log/pkgproxy-daemon.log
             ~/.local/state/snapcraft/log/lxc-container.log
           retention-days: 7
-
-      - name: Prepare pkgproxy package cache for GitHub cache save
-        if: ${{ fromJSON(inputs.enable-pkgproxy) && always() }}
-        shell: bash
-        run: |
-          sudo systemctl stop pkgproxy.service || true
-          sudo chown -R "$USER:$USER" /var/cache/pkgproxy
-
-      # Save only when the stable success key wasn't an exact hit: GitHub caches
-      # are immutable, so re-saving an already-restored key would fail, and the
-      # whole point of the stable key is that a warm cache needs no rewrite.
-      - name: Save pkgproxy package cache (on success)
-        if: ${{ fromJSON(inputs.enable-pkgproxy) && success() && steps.snap-output.outputs.snap-filename != '' && steps.pkgproxy.outputs.package-cache-hit != 'true' }}
-        uses: actions/cache/save@v6
-        with:
-          path: /var/cache/pkgproxy
-          key: ${{ steps.pkgproxy.outputs.package-cache-key-success }}
-
-      - name: Save pkgproxy package cache (on failure)
-        if: ${{ fromJSON(inputs.enable-pkgproxy) && failure() && steps.pkgproxy.outputs.package-cache-hit != 'true' }}
-        uses: actions/cache/save@v6
-        with:
-          path: /var/cache/pkgproxy
-          key: ${{ steps.pkgproxy.outputs.package-cache-key-partial }}
