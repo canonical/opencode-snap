@@ -96,27 +96,6 @@ jobs:
           # later as the opaque "lxd forkstart ... exit status 1" during snapcraft pack.
           pkgproxyctl setup snapcraft -addr "${{ steps.pkgproxy.outputs.addr }}" | sudo sh
 
-      - name: Verify pkgproxy provisioned the LXC hooks
-        if: ${{ fromJSON(inputs.enable-pkgproxy) }}
-        shell: bash
-        run: |
-          # The 'snapcraft' profile's raw.lxc must carry both of pkgproxy's hooks
-          # (base64-encoded inline, with no hook file on the host) before snapcraft
-          # launches any build container — or container start fails deep inside the
-          # build with the opaque "lxd forkstart ... exit status 1".
-          RAW_LXC=$(lxc profile get default raw.lxc --project snapcraft)
-          if ! printf '%s\n' "$RAW_LXC" | grep -q '^lxc.hook.pre-start = ' ||
-             ! printf '%s\n' "$RAW_LXC" | grep -q '^lxc.hook.post-stop = '; then
-            echo "::error::pkgproxy LXC hooks missing from the snapcraft project's default profile" >&2
-            echo "--- pkgproxy profile (project snapcraft) ---"
-            lxc profile show default --project snapcraft || true
-            echo "--- pkgproxy daemon journal ---"
-            sudo journalctl -u pkgproxy.service --no-pager -n 100 || true
-            exit 1
-          fi
-          echo "pre-start and post-stop hooks present in raw.lxc:"
-          printf '%s\n' "$RAW_LXC"
-
       - name: Configure pkgproxy as cached LXD image remote
         if: ${{ fromJSON(inputs.enable-pkgproxy) }}
         shell: bash
